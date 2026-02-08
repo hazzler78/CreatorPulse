@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
-import { API_BASE } from "./api.js";
+import { supabase } from "./supabase.js";
+import { apiFetch } from "./api.js";
+import Auth from "./components/Auth.jsx";
 import GoalCard from "./components/GoalCard.jsx";
 import AdSimulator from "./components/AdSimulator.jsx";
 import PlatformOverview from "./components/PlatformOverview.jsx";
@@ -30,10 +32,19 @@ function useTheme() {
   return { theme, toggleTheme: () => setTheme((t) => (t === "dark" ? "light" : "dark")) };
 }
 
+function getOnboardedKey(userId) {
+  return userId ? `creatorpulse-onboarded-${userId}` : "creatorpulse-onboarded";
+}
+
 export default function App() {
   const { toggleTheme } = useTheme();
+  const [user, setUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [skipAuth, setSkipAuth] = useState(false);
+
+  const userId = user?.id ?? "demo-user";
   const [hasOnboarded, setHasOnboarded] = useState(() => {
-    return window.localStorage.getItem("creatorpulse-onboarded") === "true";
+    return window.localStorage.getItem(getOnboardedKey(userId)) === "true";
   });
   const [goal, setGoal] = useState({
     previousRevenue: 0,
@@ -43,6 +54,31 @@ export default function App() {
   const [platforms, setPlatforms] = useState([]);
   const [accounts, setAccounts] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [tiktokConnecting, setTiktokConnecting] = useState(false);
+
+  // Reset onboarded check when user changes
+  useEffect(() => {
+    setHasOnboarded(window.localStorage.getItem(getOnboardedKey(userId)) === "true");
+  }, [userId]);
+
+  useEffect(() => {
+    if (!supabase) {
+      setAuthLoading(false);
+      return;
+    }
+    const {
+      data: { session }
+    } = supabase.auth.getSession();
+    setUser(session?.user ?? null);
+    setAuthLoading(false);
+
+    const {
+      data: { subscription }
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+    return () => subscription?.unsubscribe();
+  }, []);
 
   const handleOnboardingComplete = (newGoal) => {
     setGoal((prev) => ({
@@ -50,22 +86,43 @@ export default function App() {
       previousRevenue: newGoal.previousRevenue ?? prev.previousRevenue,
       growthTargetPercent: newGoal.growthTargetPercent ?? prev.growthTargetPercent
     }));
-    window.localStorage.setItem("creatorpulse-onboarded", "true");
+    window.localStorage.setItem(getOnboardedKey(userId), "true");
     setHasOnboarded(true);
   };
 
   const handleRestartOnboarding = () => {
-    window.localStorage.removeItem("creatorpulse-onboarded");
+    window.localStorage.removeItem(getOnboardedKey(userId));
     setHasOnboarded(false);
+  };
+
+  const handleSignOut = async () => {
+    if (supabase) await supabase.auth.signOut();
+  };
+
+  const handleConnectTiktok = async () => {
+    setTiktokConnecting(true);
+    try {
+      const res = await apiFetch("/api/auth/tiktok/url");
+      const data = await res.json();
+      if (data?.url) {
+        window.location.href = data.url;
+      } else {
+        window.location.href = `${window.location.origin}?tiktok_error=url`;
+      }
+    } catch {
+      window.location.href = `${window.location.origin}?tiktok_error=request`;
+    } finally {
+      setTiktokConnecting(false);
+    }
   };
 
   const loadData = async () => {
     try {
       setLoading(true);
       const [goalsRes, platformsRes, accountsRes] = await Promise.all([
-        fetch(`${API_BASE}/api/goals`),
-        fetch(`${API_BASE}/api/platforms/summary`),
-        fetch(`${API_BASE}/api/accounts`)
+        apiFetch("/api/goals"),
+        apiFetch("/api/platforms/summary"),
+        apiFetch("/api/accounts")
       ]);
 
       const goalsJson = await goalsRes.json();
@@ -103,8 +160,8 @@ export default function App() {
   };
 
   useEffect(() => {
-    loadData();
-  }, []);
+    if (user || skipAuth) loadData();
+  }, [user, skipAuth]);
 
   // Handle TikTok OAuth return: refetch data and clean URL
   useEffect(() => {
@@ -120,6 +177,20 @@ export default function App() {
     }
   }, []);
 
+  const isAuthenticated = supabase ? !!user : skipAuth;
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-slate-950 to-slate-950 text-slate-400">
+        <div className="animate-pulse">Loading…</div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <Auth onAuthenticated={() => setSkipAuth(true)} />;
+  }
+
   if (!hasOnboarded) {
     return <Onboarding onComplete={handleOnboardingComplete} />;
   }
@@ -130,7 +201,7 @@ export default function App() {
       ? platforms.filter((p) => connectedPlatformIds.has(p.platform.toLowerCase()))
       : platforms.length
       ? platforms
-      : []; // fall back to empty until backend returns
+      : [];
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-950 to-slate-950 text-slate-50">
@@ -151,14 +222,27 @@ export default function App() {
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
               <ConnectedAccounts />
               <div className="flex items-center gap-2">
-                <a
-                  href={`${API_BASE}/api/auth/tiktok/url`}
-                  className="hidden md:inline-flex items-center rounded-full border border-slate-700 px-3 py-1.5 text-xs text-slate-200 hover:border-slate-500 transition-colors"
+                <button
+                  type="button"
+                  onClick={handleConnectTiktok}
+                  disabled={tiktokConnecting}
+                  className="hidden md:inline-flex items-center rounded-full border border-slate-700 px-3 py-1.5 text-xs text-slate-200 hover:border-slate-500 transition-colors disabled:opacity-60"
                 >
-                  Connect TikTok
-                </a>
-                <div className="rounded-full bg-slate-900/80 border border-slate-800 px-3 py-1.5 text-[11px] text-slate-300">
-                  Logged in • Demo user
+                  {tiktokConnecting ? "Redirecting…" : "Connect TikTok"}
+                </button>
+                <div className="flex items-center gap-2 rounded-full bg-slate-900/80 border border-slate-800 px-3 py-1.5">
+                  <span className="text-[11px] text-slate-300">
+                    {user?.email ?? "Demo user"}
+                  </span>
+                  {user && (
+                    <button
+                      type="button"
+                      onClick={handleSignOut}
+                      className="text-[11px] text-slate-400 hover:text-slate-200"
+                    >
+                      Sign out
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -226,4 +310,3 @@ export default function App() {
     </div>
   );
 }
-

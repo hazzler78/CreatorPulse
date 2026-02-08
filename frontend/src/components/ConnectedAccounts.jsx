@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { API_BASE } from "../api.js";
+import { apiFetch } from "../api.js";
 
 const LABELS = {
   tiktok: "TikTok",
@@ -14,7 +14,7 @@ export default function ConnectedAccounts() {
   useEffect(() => {
     const load = async () => {
       try {
-        const res = await fetch(`${API_BASE}/api/accounts`);
+        const res = await apiFetch("/api/accounts");
         const json = await res.json();
         setAccounts(json.accounts ?? []);
       } catch {

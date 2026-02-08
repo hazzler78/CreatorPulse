@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import { authMiddleware } from "./middleware.auth.js";
 import goalsRouter from "./routes.goals.js";
 import platformsRouter from "./routes.platforms.js";
 import simulatorRouter from "./routes.simulator.js";
@@ -22,11 +23,7 @@ app.get("/api/health", (_req, res) => {
   res.json({ status: "ok", app: "CreatorPulse" });
 });
 
-// Auth middleware placeholder – wire to Auth0 / Clerk in real app
-app.use((req, _res, next) => {
-  req.user = { sub: "demo-user" };
-  next();
-});
+app.use(authMiddleware);
 
 app.use("/api/goals", goalsRouter);
 app.use("/api/platforms", platformsRouter);

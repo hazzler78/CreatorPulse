@@ -15,19 +15,19 @@ const frontendOrigin = process.env.FRONTEND_ORIGIN || "http://localhost:5173";
 
 /**
  * GET /api/auth/tiktok/url
- * Redirects the user to TikTok's authorization page.
+ * Returns { url } to redirect the user to TikTok's authorization page.
  * Requires auth middleware to set req.user.sub (current user id).
  */
 router.get("/url", (req, res) => {
   const userId = req.user?.sub || "demo-user";
   if (!clientKey || !redirectUri) {
-    return res.redirect(`${frontendOrigin}?tiktok_error=config`);
+    return res.status(400).json({ error: "TikTok auth not configured" });
   }
   const result = getAuthUrl(clientKey, clientSecret, redirectUri, userId);
   if (!result) {
-    return res.redirect(`${frontendOrigin}?tiktok_error=url`);
+    return res.status(500).json({ error: "Failed to build auth URL" });
   }
-  res.redirect(result.url);
+  res.json({ url: result.url });
 });
 
 /**

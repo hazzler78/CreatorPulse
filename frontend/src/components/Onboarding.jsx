@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { API_BASE } from "../api.js";
+import { apiFetch } from "../api.js";
 
 const PLATFORMS = [
   { id: "tiktok", label: "TikTok" },
@@ -44,7 +44,7 @@ export default function Onboarding({ onComplete }) {
       // Hit backend in demo mode so you can test quickly
       await Promise.all(
         enabled.map((p) =>
-          fetch(`${API_BASE}/api/accounts`, {
+          apiFetch("/api/accounts", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
