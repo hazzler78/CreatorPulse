@@ -5,7 +5,9 @@ const AUTH_URL = "https://www.tiktok.com/v2/auth/authorize/";
 const TOKEN_URL = "https://open.tiktokapis.com/v2/oauth/token/";
 const USER_INFO_URL = "https://open.tiktokapis.com/v2/user/info/";
 
-const SCOPES = "user.info.basic,user.info.profile,user.info.stats";
+const SCOPES = "user.info.basic,user.info.profile,user.info.stats,video.list";
+
+const VIDEO_LIST_URL = "https://open.tiktokapis.com/v2/video/list/";
 
 /** In-memory state store for OAuth (state -> { userId, createdAt }). Use Redis in production. */
 const stateStore = new Map();
@@ -102,6 +104,38 @@ export async function fetchUserInfo(accessToken) {
     likes_count: Number(user.likes_count ?? 0),
     video_count: Number(user.video_count ?? 0)
   };
+}
+
+/**
+ * Fetch user's video list with view counts. Requires video.list scope.
+ * Returns array of { id, title, view_count, create_time } or null.
+ */
+export async function fetchVideoList(accessToken, maxCount = 20) {
+  if (!accessToken) return null;
+  const fields = "id,title,view_count,create_time,video_description";
+  const url = `${VIDEO_LIST_URL}?fields=${encodeURIComponent(fields)}`;
+  try {
+    const res = await axios.post(
+      url,
+      { max_count: maxCount },
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json"
+        }
+      }
+    );
+    const videos = res.data?.data?.videos ?? [];
+    return videos.map((v) => ({
+      id: v.id,
+      title: v.title || v.video_description || "Untitled",
+      view_count: Number(v.view_count ?? 0),
+      create_time: v.create_time
+    }));
+  } catch (err) {
+    console.warn("TikTok video list error:", err?.response?.data?.message || err.message);
+    return null;
+  }
 }
 
 /**

@@ -33,10 +33,13 @@ The **Redirect URI** is configured inside the **Login Kit** product, not in App 
 ## Step 3: Add scopes
 
 1. Expand **Scopes** in the sidebar.
-2. Add these scopes (needed for user info):
+2. Add these scopes:
    - `user.info.basic`
    - `user.info.profile`
    - `user.info.stats`
+   - `video.list` (för riktiga visningsantal på topp-videon)
+
+**Om du redan har kopplat TikTok:** koppla loss och koppla in igen efter att du lagt till `video.list`, så att den nya access-tokenen inkluderar scope.
 
 ---
 

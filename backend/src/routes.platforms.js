@@ -4,6 +4,7 @@ import { fetchChannelStatsByHandle } from "./services.youtube.js";
 import { fetchArtistStats } from "./services.spotify.js";
 import {
   fetchUserInfo as fetchTikTokUserInfo,
+  fetchVideoList as fetchTikTokVideoList,
   refreshAccessToken as refreshTikTokToken
 } from "./services.tiktok.js";
 
@@ -40,6 +41,8 @@ router.get("/summary", async (req, res) => {
       if (accessToken) {
         try {
           tiktokLiveStats = await fetchTikTokUserInfo(accessToken);
+          const tiktokVideos = await fetchTikTokVideoList(accessToken);
+          if (tiktokLiveStats) tiktokLiveStats._videos = tiktokVideos ?? [];
           if (!tiktokLiveStats && refreshToken && TIKTOK_CLIENT_KEY && TIKTOK_CLIENT_SECRET) {
             const refreshed = await refreshTikTokToken(
               refreshToken,
@@ -61,6 +64,9 @@ router.get("/summary", async (req, res) => {
                 .eq("user_id", userId)
                 .eq("platform", "tiktok");
               tiktokLiveStats = await fetchTikTokUserInfo(refreshed.access_token);
+              if (tiktokLiveStats) {
+                tiktokLiveStats._videos = await fetchTikTokVideoList(refreshed.access_token) ?? [];
+              }
             }
           }
         } catch (err) {
@@ -98,15 +104,24 @@ router.get("/summary", async (req, res) => {
         display_name,
         follower_count,
         likes_count,
-        video_count
+        video_count,
+        _videos: videos = []
       } = tiktokLiveStats;
       const approxRevenue = Math.round((follower_count / 1000) * 4 + (likes_count / 5000));
       const engagementRate =
         video_count && likes_count
           ? Math.min((likes_count / (video_count * 100)) * 10, 15)
           : 2.5;
-      const avgViewsPerVideo =
-        video_count > 0 ? Math.round(likes_count / Math.max(video_count, 1)) : 0;
+      // Use real view_count from video list when available; fallback to approximation
+      const topVideo = videos.length > 0
+        ? videos.reduce((a, b) => (a.view_count >= b.view_count ? a : b), videos[0])
+        : null;
+      const topPostViews = topVideo?.view_count ?? (video_count > 0 ? Math.round(likes_count / Math.max(video_count, 1)) : follower_count);
+      const topPostLabel = topVideo
+        ? (topVideo.title
+            ? `Live · "${topVideo.title.slice(0, 30)}${topVideo.title.length > 30 ? "…" : ""}"`
+            : `Live · Top post (${display_name || username})`)
+        : `Live · "${display_name || username}"`;
       return {
         platform: "TikTok",
         handle: username || displayHandle || display_name,
@@ -116,8 +131,8 @@ router.get("/summary", async (req, res) => {
           revenueChange: 0,
           engagement: Number(engagementRate.toFixed(1)),
           engagementChange: 0,
-          topPostViews: avgViewsPerVideo || follower_count,
-          topPostLabel: `Live · "${display_name || username}"`
+          topPostViews,
+          topPostLabel
         },
         hashtags: [
           { tag: "#followers", lift: Math.max(follower_count / 1000, 0.1) },

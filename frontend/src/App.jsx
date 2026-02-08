@@ -223,7 +223,7 @@ export default function App() {
               </p>
             </div>
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
-              <ConnectedAccounts />
+              <ConnectedAccounts onDisconnect={loadData} />
               <div className="flex items-center gap-2">
                 <button
                   type="button"

@@ -8,21 +8,34 @@ const LABELS = {
   spotify: "Spotify"
 };
 
-export default function ConnectedAccounts() {
+export default function ConnectedAccounts({ onDisconnect }) {
   const [accounts, setAccounts] = useState([]);
 
+  const load = async () => {
+    try {
+      const res = await apiFetch("/api/accounts");
+      const json = await res.json();
+      setAccounts(json.accounts ?? []);
+    } catch {
+      // ignore for now – stays empty if backend not running
+    }
+  };
+
   useEffect(() => {
-    const load = async () => {
-      try {
-        const res = await apiFetch("/api/accounts");
-        const json = await res.json();
-        setAccounts(json.accounts ?? []);
-      } catch {
-        // ignore for now – stays empty if backend not running
-      }
-    };
     load();
   }, []);
+
+  const handleDisconnect = async (platform) => {
+    try {
+      const res = await apiFetch(`/api/accounts/${platform}`, { method: "DELETE" });
+      if (res.ok) {
+        await load();
+        onDisconnect?.();
+      }
+    } catch {
+      // ignore
+    }
+  };
 
   if (!accounts.length) {
     return null;
@@ -45,6 +58,15 @@ export default function ConnectedAccounts() {
               {acc.status}
             </span>
           )}
+          <button
+            type="button"
+            onClick={() => handleDisconnect(acc.platform)}
+            className="ml-0.5 text-slate-500 hover:text-red-400 transition-colors"
+            title={`Disconnect ${LABELS[acc.platform] || acc.platform}`}
+            aria-label={`Disconnect ${LABELS[acc.platform] || acc.platform}`}
+          >
+            ×
+          </button>
         </span>
       ))}
     </div>

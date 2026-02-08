@@ -85,5 +85,36 @@ router.post("/", async (req, res) => {
   }
 });
 
+// DELETE /api/accounts/:platform - disconnect/remove a platform for current user
+router.delete("/:platform", async (req, res) => {
+  try {
+    const userId = req.user?.sub || "demo-user";
+    const platform = (req.params.platform || "").toLowerCase();
+    if (!platform) {
+      return res.status(400).json({ message: "platform is required" });
+    }
+
+    if (!supabase) {
+      const idx = inMemoryAccounts.findIndex(
+        (a) => a.user_id === userId && a.platform === platform
+      );
+      if (idx >= 0) inMemoryAccounts.splice(idx, 1);
+      return res.status(204).send();
+    }
+
+    const { error } = await supabase
+      .from("platform_accounts")
+      .delete()
+      .eq("user_id", userId)
+      .eq("platform", platform);
+
+    if (error) throw error;
+    return res.status(204).send();
+  } catch (err) {
+    console.error("Error disconnecting account", err);
+    return res.status(500).json({ message: "Failed to disconnect account" });
+  }
+});
+
 export default router;
 
