@@ -66,18 +66,21 @@ export default function App() {
       setAuthLoading(false);
       return;
     }
-    const {
-      data: { session }
-    } = supabase.auth.getSession();
-    setUser(session?.user ?? null);
-    setAuthLoading(false);
-
-    const {
-      data: { subscription }
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
+    let mounted = true;
+    supabase.auth.getSession().then(({ data }) => {
+      if (!mounted) return;
+      setUser(data?.session?.user ?? null);
+    }).finally(() => {
+      if (mounted) setAuthLoading(false);
     });
-    return () => subscription?.unsubscribe();
+
+    const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (mounted) setUser(session?.user ?? null);
+    });
+    return () => {
+      mounted = false;
+      subscription?.unsubscribe?.();
+    };
   }, []);
 
   const handleOnboardingComplete = (newGoal) => {
