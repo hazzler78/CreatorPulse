@@ -13,10 +13,14 @@ export const API_BASE = import.meta.env.VITE_API_URL || "";
 export async function apiFetch(path, options = {}) {
   const headers = { ...options.headers };
   if (supabase) {
-    const { data } = await supabase.auth.getSession();
-    const session = data?.session;
-    if (session?.access_token) {
-      headers.Authorization = `Bearer ${session.access_token}`;
+    try {
+      const { data } = await supabase.auth.getSession();
+      const session = data?.session;
+      if (session?.access_token) {
+        headers.Authorization = `Bearer ${session.access_token}`;
+      }
+    } catch {
+      // Token refresh may fail (e.g. 400) – proceed without auth header
     }
   }
   return fetch(`${API_BASE}${path}`, { ...options, headers });

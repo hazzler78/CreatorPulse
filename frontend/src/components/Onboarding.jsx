@@ -36,12 +36,10 @@ export default function Onboarding({ onComplete }) {
   };
 
   const handleFinish = async () => {
+    setSaving(true);
+    const enabled = PLATFORMS.filter((p) => selectedPlatforms[p.id]?.enabled);
+
     try {
-      setSaving(true);
-
-      const enabled = PLATFORMS.filter((p) => selectedPlatforms[p.id]?.enabled);
-
-      // Hit backend in demo mode so you can test quickly
       await Promise.all(
         enabled.map((p) =>
           apiFetch("/api/accounts", {
@@ -57,27 +55,21 @@ export default function Onboarding({ onComplete }) {
           })
         )
       );
-
-      const stageDefaults = {
-        early: 50,
-        steady: 30,
-        mature: 15
-      };
-
-      const goal = {
-        growthMetric,
-        // We don't force you to guess last month's revenue; we let the system
-        // treat "now" as the starting point.
-        previousRevenue: 0,
-        growthTargetPercent: stageDefaults[growthStage] ?? 30
-      };
-
-      if (onComplete) {
-        onComplete(goal, enabled);
-      }
-    } finally {
-      setSaving(false);
+    } catch {
+      // Backend may be unreachable – proceed anyway; data loads from API later
     }
+
+    const stageDefaults = { early: 50, steady: 30, mature: 15 };
+    const goal = {
+      growthMetric,
+      previousRevenue: 0,
+      growthTargetPercent: stageDefaults[growthStage] ?? 30
+    };
+
+    if (onComplete) {
+      onComplete(goal, enabled);
+    }
+    setSaving(false);
   };
 
   return (
