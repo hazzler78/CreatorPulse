@@ -40,10 +40,13 @@ The **Redirect URI** is configured inside the **Login Kit** product, not in App 
 
 ---
 
-## Step 4: Development vs Production
+## Step 4: Production vs Sandbox (viktigt!)
 
-- **Development**: You can test immediately. Add your TikTok account as a **test user** in the app.
-- **Production**: Fill all required fields (description, demo video, etc.) and **Submit for review**.
+**Production** och **Sandbox** har olika Client Key och Client Secret. Du måste:
+1. Välj **samma flik** (Production eller Sandbox) överallt
+2. Lägg till Redirect URI i Login Kit under **den** fliken
+3. Kopiera Client Key + Client Secret från **den** fliken till Render
+4. Om du är i **Sandbox/Draft**: lägg till ditt TikTok-konto som **test user**
 
 ---
 
@@ -94,3 +97,5 @@ If you get "client_key" after authorizing (including via QR code):
 4. **Verify config** – Visit `https://creatorpulse-9ldz.onrender.com/api/auth/tiktok/debug` in your browser. It shows whether client key, redirect URI, etc. are set correctly (without exposing secrets). `redirectUri` must exactly match `expectedRedirectUri`.
 
 5. **App approval** – If the app is in "Draft" or "Pending review", only test users can connect. Add your TikTok account as a test user in Developer Portal → App details → Test users (or similar). Or wait for Production approval.
+
+6. **Contact TikTok Support** – If the error continues, use [TikTok Developer Support](https://developers.tiktok.com/) and include your **log_id** (e.g. `20260208155531155384BF4AA04467FB66`). They can look up the exact cause.

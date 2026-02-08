@@ -56,7 +56,7 @@ router.get("/callback", async (req, res) => {
   const redirectError = `${frontendOrigin}?tiktok_error=${encodeURIComponent(errParam)}&tiktok_desc=${encodeURIComponent(error_description || "")}`;
 
   if (error) {
-    console.error("TikTok OAuth error:", { error, error_description, log_id });
+    console.error("TikTok OAuth error (from redirect):", { error, error_description, log_id, query: req.query });
     return res.redirect(redirectError);
   }
 
