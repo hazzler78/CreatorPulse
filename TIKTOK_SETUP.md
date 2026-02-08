@@ -91,4 +91,6 @@ If you get "client_key" after authorizing (including via QR code):
 
 3. **Avoid QR if possible** – Try the normal flow: click "Connect TikTok" and authorize in the same browser tab. The QR flow can be more sensitive to env/state issues.
 
-4. **Check Render logs** – After a failed attempt, check Render → Logs for the full TikTok error (error code, description, log_id).
+4. **Verify config** – Visit `https://creatorpulse-9ldz.onrender.com/api/auth/tiktok/debug` in your browser. It shows whether client key, redirect URI, etc. are set correctly (without exposing secrets). `redirectUri` must exactly match `expectedRedirectUri`.
+
+5. **App approval** – If the app is in "Draft" or "Pending review", only test users can connect. Add your TikTok account as a test user in Developer Portal → App details → Test users (or similar). Or wait for Production approval.

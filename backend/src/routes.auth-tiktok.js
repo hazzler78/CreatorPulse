@@ -8,10 +8,25 @@ import {
 } from "./services.tiktok.js";
 
 const router = express.Router();
-const clientKey = process.env.TIKTOK_CLIENT_KEY;
-const clientSecret = process.env.TIKTOK_CLIENT_SECRET;
-const redirectUri = process.env.TIKTOK_REDIRECT_URI;
-const frontendOrigin = process.env.FRONTEND_ORIGIN || "http://localhost:5173";
+const clientKey = (process.env.TIKTOK_CLIENT_KEY || "").trim();
+const clientSecret = (process.env.TIKTOK_CLIENT_SECRET || "").trim();
+const redirectUri = (process.env.TIKTOK_REDIRECT_URI || "").trim();
+const frontendOrigin = (process.env.FRONTEND_ORIGIN || "http://localhost:5173").trim();
+
+/**
+ * GET /api/auth/tiktok/debug
+ * Returns config status for troubleshooting (no secrets). Call from browser or curl.
+ */
+router.get("/debug", (req, res) => {
+  res.json({
+    clientKey: clientKey ? `${clientKey.slice(0, 4)}...${clientKey.slice(-4)}` : "MISSING",
+    clientSecretSet: !!clientSecret,
+    redirectUri: redirectUri || "MISSING",
+    redirectUriLength: redirectUri?.length ?? 0,
+    frontendOrigin: frontendOrigin || "MISSING",
+    expectedRedirectUri: "https://creatorpulse-9ldz.onrender.com/api/auth/tiktok/callback"
+  });
+});
 
 /**
  * GET /api/auth/tiktok/url
