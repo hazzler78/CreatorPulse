@@ -1,45 +1,80 @@
 # TikTok Login Kit – Setup for CreatorPulse
 
-## 1. TikTok Developer Portal
+## Step 1: App details (where you are now)
 
-1. Go to [developers.tiktok.com](https://developers.tiktok.com) and sign in.
-2. Open **Manage apps** and select your app (or create one).
-3. Under **Login Kit** (or **Products** → **Login Kit**):
-   - Add the **Redirect URI**:
-     ```
-     https://creatorpulse-9ldz.onrender.com/api/auth/tiktok/callback
-     ```
-   - Add your **domain** to allowed domains if required:
-     ```
-     https://creator-pulse-drab.vercel.app
-     ```
+Fill in the **App details** section:
 
-## 2. App credentials
+| Field | Value |
+|-------|-------|
+| **Web/Desktop URL** | `https://creator-pulse-drab.vercel.app` |
+| **Terms of Service URL** | `https://creator-pulse-drab.vercel.app/terms` |
+| **Privacy Policy URL** | `https://creator-pulse-drab.vercel.app/privacy` |
 
-In the app settings, copy:
-- **Client Key** → `TIKTOK_CLIENT_KEY`
-- **Client Secret** → `TIKTOK_CLIENT_SECRET`
+Click **Save**.
 
-## 3. Backend env vars (Render)
+---
+
+## Step 2: Add Login Kit product (Redirect URI is here)
+
+The **Redirect URI** is configured inside the **Login Kit** product, not in App details.
+
+1. In the left sidebar, expand **Products**.
+2. Click **+ Add products**.
+3. Select **Login Kit** and add it.
+4. In the Login Kit configuration, find **Redirect URI** or **Redirect URIs**.
+5. Add this **exact** URL:
+   ```
+   https://creatorpulse-9ldz.onrender.com/api/auth/tiktok/callback
+   ```
+6. Save.
+
+---
+
+## Step 3: Add scopes
+
+1. Expand **Scopes** in the sidebar.
+2. Add these scopes (needed for user info):
+   - `user.info.basic`
+   - `user.info.profile`
+   - `user.info.stats`
+
+---
+
+## Step 4: Development vs Production
+
+- **Development**: You can test immediately. Add your TikTok account as a **test user** in the app.
+- **Production**: Fill all required fields (description, demo video, etc.) and **Submit for review**.
+
+---
+
+## Step 5: Credentials
+
+At the top of the page you should see:
+- **Client Key**: `awjkubik0h410lff` (already matches your .env)
+- **Client Secret**: Copy this – it goes in `TIKTOK_CLIENT_SECRET`
+
+---
+
+## Step 6: Render environment variables
 
 Set in Render → Your service → Environment:
 
 | Variable | Value |
 |----------|-------|
-| `TIKTOK_CLIENT_KEY` | Your Client Key |
+| `TIKTOK_CLIENT_KEY` | `awjkubik0h410lff` |
 | `TIKTOK_CLIENT_SECRET` | Your Client Secret |
 | `TIKTOK_REDIRECT_URI` | `https://creatorpulse-9ldz.onrender.com/api/auth/tiktok/callback` |
 | `FRONTEND_ORIGIN` | `https://creator-pulse-drab.vercel.app` |
 
-## 4. "client_key" error
+---
 
-If TikTok shows a `client_key` error:
+## Quick reference
 
-- The Redirect URI in the TikTok app **must match** `TIKTOK_REDIRECT_URI` exactly.
-- The Client Key must be from the same app where the Redirect URI is configured.
-- In Development mode, add your TikTok account as a **test user** in the app.
-- Wait a few minutes after changing settings; TikTok may cache config.
+| Purpose | URL |
+|---------|-----|
+| Your app (main site) | `https://creator-pulse-drab.vercel.app` |
+| Terms of Service | `https://creator-pulse-drab.vercel.app/terms` |
+| Privacy Policy | `https://creator-pulse-drab.vercel.app/privacy` |
+| **OAuth redirect (callback)** | `https://creatorpulse-9ldz.onrender.com/api/auth/tiktok/callback` |
 
-## 5. Redeploy
-
-After changing env vars in Render, trigger a new deploy so they take effect.
+The redirect URI must **exactly match** – no trailing slash, no query params.
