@@ -102,6 +102,15 @@ export default function App() {
     if (supabase) await supabase.auth.signOut();
   };
 
+  const handleDisconnectPlatform = async (platform) => {
+    try {
+      const res = await apiFetch(`/api/accounts/${platform}`, { method: "DELETE" });
+      if (res.ok) await loadData();
+    } catch {
+      // ignore
+    }
+  };
+
   const handleConnectTiktok = async () => {
     setTiktokConnecting(true);
     try {
@@ -266,7 +275,7 @@ export default function App() {
             }
           />
 
-          <section className="grid md:grid-cols-2 xl:grid-cols-2 gap-4 md:gap-5">
+          <section className="grid grid-cols-1 gap-4 md:gap-5 max-w-3xl">
             {visiblePlatforms.map((p) => (
               <PlatformOverview
                 key={p.platform}
@@ -279,6 +288,8 @@ export default function App() {
                   value
                 }))}
                 live={p._live === true}
+                canDisconnect={accounts.some((a) => a.platform === p.platform.toLowerCase())}
+                onDisconnect={handleDisconnectPlatform}
               />
             ))}
             {!loading && visiblePlatforms.length === 0 && (

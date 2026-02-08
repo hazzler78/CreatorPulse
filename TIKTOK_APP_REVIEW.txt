@@ -1,0 +1,19 @@
+CreatorPulse – TikTok Product & Scope Explanation (for App Review)
+
+================================================================================
+COPY THIS (max 1000 characters) – paste into TikTok App Review text area:
+================================================================================
+
+CreatorPulse is a progress hub for content creators to track revenue goals, ad momentum, and platform health. Login Kit lets creators connect their TikTok account so their metrics appear in the dashboard.
+
+Flow: User clicks "Connect TikTok" on creator-pulse-drab.vercel.app, authorizes on TikTok, and is redirected back. We exchange the code for an access token, fetch profile and stats, and display them in a Platform Overview card.
+
+user.info.basic: Retrieves username and display name for the connected accounts section so users identify which TikTok account is linked.
+user.info.profile: Fetches profile details to personalize the dashboard.
+user.info.stats: Displays follower_count, following_count, likes_count, video_count in the platform overview so creators see audience metrics alongside revenue goals.
+
+Data is shown only to the authenticated owner. We do not post, share, or use TikTok data beyond displaying the creator's own metrics.
+
+================================================================================
+Character count: ~790
+================================================================================
