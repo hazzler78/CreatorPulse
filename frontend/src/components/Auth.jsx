@@ -37,7 +37,12 @@ export default function Auth({ onAuthenticated }) {
       }
       onAuthenticated?.();
     } catch (err) {
-      setError(err.message || "Something went wrong");
+      const isRateLimited = err?.status === 429 || /rate limit|too many requests/i.test(err?.message || "");
+      setError(
+        isRateLimited
+          ? "Too many requests. Please wait a minute and try again."
+          : err.message || "Something went wrong"
+      );
     } finally {
       setLoading(false);
     }
