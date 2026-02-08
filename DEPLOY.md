@@ -33,6 +33,10 @@ The frontend works without the backend (default data, no TikTok OAuth). For full
    - `FRONTEND_ORIGIN` = your Vercel URL (e.g. `https://creatorpulse-xxx.vercel.app`)
 3. Add the backend URL as `VITE_API_URL` in Vercel’s project settings.
 
+## TikTok Login
+
+See [TIKTOK_SETUP.md](TIKTOK_SETUP.md) for configuring TikTok OAuth with the new domain.
+
 ## Terms of Service & Privacy Policy
 
 - **Terms:** `/terms` → `terms.html`
