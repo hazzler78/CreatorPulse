@@ -35,11 +35,13 @@ router.get("/url", (req, res) => {
  * TikTok redirects here after user authorizes. Exchange code for token, store, redirect to app.
  */
 router.get("/callback", async (req, res) => {
-  const { code, state, error, error_description } = req.query;
+  const { code, state, error, error_description, log_id } = req.query;
   const redirectSuccess = `${frontendOrigin}?tiktok=connected`;
-  const redirectError = `${frontendOrigin}?tiktok_error=${error || "callback"}`;
+  const errParam = error || "callback";
+  const redirectError = `${frontendOrigin}?tiktok_error=${encodeURIComponent(errParam)}&tiktok_desc=${encodeURIComponent(error_description || "")}`;
 
   if (error) {
+    console.error("TikTok OAuth error:", { error, error_description, log_id });
     return res.redirect(redirectError);
   }
 
@@ -60,6 +62,7 @@ router.get("/callback", async (req, res) => {
       redirectUri
     );
     if (!tokenData) {
+      console.error("TikTok token exchange failed – check Render logs for axios error");
       return res.redirect(redirectError);
     }
 
@@ -85,8 +88,15 @@ router.get("/callback", async (req, res) => {
 
     return res.redirect(redirectSuccess);
   } catch (err) {
-    console.error("TikTok callback error:", err?.response?.data || err.message);
-    return res.redirect(redirectError);
+    const tikErr = err?.response?.data;
+    console.error("TikTok callback error:", {
+      message: err.message,
+      status: err?.response?.status,
+      data: tikErr,
+      log_id: tikErr?.log_id
+    });
+    const errCode = tikErr?.error === "invalid_client" ? "client_key" : errParam;
+    return res.redirect(`${frontendOrigin}?tiktok_error=${encodeURIComponent(errCode)}&tiktok_desc=${encodeURIComponent(tikErr?.description || err.message || "")}`);
   }
 });
 

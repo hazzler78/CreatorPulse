@@ -78,3 +78,17 @@ Set in Render → Your service → Environment:
 | **OAuth redirect (callback)** | `https://creatorpulse-9ldz.onrender.com/api/auth/tiktok/callback` |
 
 The redirect URI must **exactly match** – no trailing slash, no query params.
+
+---
+
+## Troubleshooting: "client_key" error
+
+If you get "client_key" after authorizing (including via QR code):
+
+1. **Production vs Sandbox** – TikTok has separate credentials for each. In the Developer Portal, check which tab you're in (Production / Sandbox). Use the Client Key and Client Secret from the **same** environment as your redirect URI. Update Render env vars accordingly.
+
+2. **Redirect URI match** – In Login Kit → Redirect URI, the value must exactly match `TIKTOK_REDIRECT_URI` in Render (no extra slash, no query params).
+
+3. **Avoid QR if possible** – Try the normal flow: click "Connect TikTok" and authorize in the same browser tab. The QR flow can be more sensitive to env/state issues.
+
+4. **Check Render logs** – After a failed attempt, check Render → Logs for the full TikTok error (error code, description, log_id).
