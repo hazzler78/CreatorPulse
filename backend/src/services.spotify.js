@@ -4,9 +4,13 @@ const TOKEN_URL = "https://accounts.spotify.com/api/token";
 const API_BASE = "https://api.spotify.com/v1";
 
 /**
- * Extract Spotify artist ID from a handle that might be:
+ * Try to normalise a Spotify artist "handle" into an artist ID.
+ * Accepts:
  * - Full URL: https://open.spotify.com/artist/29Hv3V1dVlsGzLZCzNVWNZ?si=...
- * - Just the ID: 29Hv3V1dVlsGzLZCzNVWNZ
+ * - Bare ID: 29Hv3V1dVlsGzLZCzNVWNZ
+ *
+ * Returns empty string for names like "Velvet Orion X" so that callers
+ * can fall back to the search API.
  */
 function extractArtistId(raw) {
   if (!raw || typeof raw !== "string") return "";
@@ -15,8 +19,12 @@ function extractArtistId(raw) {
     const match = s.match(/artist\/([a-zA-Z0-9]+)/);
     return match ? match[1] : "";
   }
-  // Assume it's already an ID (22 chars typical for Spotify)
-  return s.split("?")[0].trim();
+  const candidate = s.split("?")[0].trim();
+  // Spotify IDs are 22-char base62 tokens; anything else is treated as a name.
+  if (/^[A-Za-z0-9]{22}$/.test(candidate)) {
+    return candidate;
+  }
+  return "";
 }
 
 async function getClientCredentialsToken(clientId, clientSecret) {
@@ -31,12 +39,33 @@ async function getClientCredentialsToken(clientId, clientSecret) {
   return res.data?.access_token || null;
 }
 
+async function resolveArtistId(rawHandle, clientId, clientSecret) {
+  const directId = extractArtistId(rawHandle);
+  if (directId) return directId;
+  if (!clientId || !clientSecret || !rawHandle) return "";
+
+  const token = await getClientCredentialsToken(clientId, clientSecret);
+  if (!token) return "";
+
+  // Fallback: search by artist name
+  const res = await axios.get(`${API_BASE}/search`, {
+    params: {
+      q: rawHandle,
+      type: "artist",
+      limit: 1
+    },
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  const first = res.data?.artists?.items?.[0];
+  return first?.id || "";
+}
+
 /**
  * Fetch public artist stats (followers, popularity, name) using Client Credentials.
  * Requires SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET in env.
  */
 export async function fetchArtistStats(rawHandle, clientId, clientSecret) {
-  const artistId = extractArtistId(rawHandle);
+  const artistId = await resolveArtistId(rawHandle, clientId, clientSecret);
   if (!artistId || !clientId || !clientSecret) return null;
 
   const token = await getClientCredentialsToken(clientId, clientSecret);
@@ -62,7 +91,7 @@ export async function fetchArtistStats(rawHandle, clientId, clientSecret) {
  * Returns array of { id, name, popularity, previewUrl }.
  */
 export async function fetchArtistTopTracks(rawHandle, clientId, clientSecret, market = "DE") {
-  const artistId = extractArtistId(rawHandle);
+  const artistId = await resolveArtistId(rawHandle, clientId, clientSecret);
   if (!artistId || !clientId || !clientSecret) return [];
 
   const token = await getClientCredentialsToken(clientId, clientSecret);
