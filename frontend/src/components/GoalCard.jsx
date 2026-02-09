@@ -28,9 +28,11 @@ export default function GoalCard({
   growthTargetPercent
 }) {
   const hasBaseline = !!previousRevenue && previousRevenue > 0;
-  const safePrev = hasBaseline ? previousRevenue : currentRevenue || 1;
+  const safePrev = hasBaseline ? previousRevenue : Math.max(currentRevenue || 0, 1);
   const absoluteDiff = currentRevenue - safePrev;
-  const actualGrowthPercent = (absoluteDiff / safePrev) * 100;
+  const rawGrowthPercent = (absoluteDiff / safePrev) * 100;
+  // When there's no baseline (first month / no data), show 0% instead of -100%
+  const actualGrowthPercent = hasBaseline ? rawGrowthPercent : Math.max(0, rawGrowthPercent);
   const targetGrowth = growthTargetPercent || 0;
 
   const growthProgressRaw =

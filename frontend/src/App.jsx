@@ -9,6 +9,7 @@ import Sidebar from "./components/Sidebar.jsx";
 import Onboarding from "./components/Onboarding.jsx";
 import ConnectedAccounts from "./components/ConnectedAccounts.jsx";
 import AddPlatform from "./components/AddPlatform.jsx";
+import HashtagSuggestions from "./components/HashtagSuggestions.jsx";
 
 function useTheme() {
   const [theme, setTheme] = useState("dark");
@@ -290,6 +291,8 @@ export default function App() {
                   (1 + (goal.growthTargetPercent || 30) / 100)
                 }
               />
+
+              <HashtagSuggestions />
 
               <section className="flex flex-col gap-4 md:gap-5 max-w-3xl">
                 <AddPlatform
