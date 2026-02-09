@@ -12,6 +12,7 @@ const router = express.Router();
 
 const TIKTOK_CLIENT_KEY = process.env.TIKTOK_CLIENT_KEY;
 const TIKTOK_CLIENT_SECRET = process.env.TIKTOK_CLIENT_SECRET;
+const BRAND_HASHTAG = "#velvetorionx"; // TODO: make per-user configurable later
 
 /**
  * Compute top-performing hashtags from a list of TikTok videos.
@@ -76,6 +77,170 @@ function computeTikTokHashtagStats(videos = []) {
     };
   });
 }
+
+/**
+ * GET /api/platforms/tiktok/hashtags
+ *
+ * Returns hashtag performance learned from the creator's own TikTok data.
+ * Shape:
+ * {
+ *   brandTag: "#velvetorionx",
+ *   hashtags: [
+ *     { tag: "#creatorlife", lift: 2.3, uses: 5, totalViews: 12345, avgViews: 2469 },
+ *     ...
+ *   ],
+ *   overallAvgViews: 1532
+ * }
+ *
+ * The frontend / client can then apply the 5-slot rule:
+ * 1 brand + 2 strong performers + 1 descriptor + 1 experiment.
+ */
+router.get("/tiktok/hashtags", async (req, res) => {
+  try {
+    const userId = req.user?.sub || "demo-user";
+
+    if (!supabase) {
+      return res
+        .status(500)
+        .json({ message: "Supabase not configured; cannot load TikTok account." });
+    }
+
+    const { data: ttAccount, error } = await supabase
+      .from("platform_accounts")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("platform", "tiktok")
+      .maybeSingle();
+
+    if (error) {
+      console.error("Supabase error loading TikTok account:", error);
+    }
+
+    if (!ttAccount?.access_token) {
+      return res.status(200).json({
+        brandTag: BRAND_HASHTAG,
+        hashtags: [],
+        overallAvgViews: 0
+      });
+    }
+
+    let accessToken = ttAccount.access_token;
+    const refreshToken = ttAccount.refresh_token;
+
+    // Fetch user + videos, with one refresh retry if needed
+    let videos = [];
+    try {
+      const info = await fetchTikTokUserInfo(accessToken);
+      if (info) {
+        const list = await fetchTikTokVideoList(accessToken);
+        videos = Array.isArray(list) ? list : [];
+      } else if (refreshToken && TIKTOK_CLIENT_KEY && TIKTOK_CLIENT_SECRET) {
+        const refreshed = await refreshTikTokToken(
+          refreshToken,
+          TIKTOK_CLIENT_KEY,
+          TIKTOK_CLIENT_SECRET
+        );
+        if (refreshed?.access_token) {
+          accessToken = refreshed.access_token;
+          const expiresAt = new Date(
+            Date.now() + (refreshed.expires_in || 86400) * 1000
+          ).toISOString();
+          await supabase
+            .from("platform_accounts")
+            .update({
+              access_token: refreshed.access_token,
+              refresh_token: refreshed.refresh_token,
+              token_expires_at: expiresAt,
+              updated_at: new Date().toISOString()
+            })
+            .eq("user_id", userId)
+            .eq("platform", "tiktok");
+          const list = await fetchTikTokVideoList(accessToken);
+          videos = Array.isArray(list) ? list : [];
+        }
+      }
+    } catch (err) {
+      console.error("TikTok hashtag endpoint error:", err?.response?.data || err.message);
+      // fall through to response with empty stats
+    }
+
+    if (!videos.length) {
+      return res.status(200).json({
+        brandTag: BRAND_HASHTAG,
+        hashtags: [],
+        overallAvgViews: 0
+      });
+    }
+
+    // Build richer stats than the summary card needs
+    let totalViewsAll = 0;
+    for (const v of videos) {
+      const views = Number(v.view_count ?? 0);
+      if (!Number.isFinite(views)) continue;
+      totalViewsAll += Math.max(views, 0);
+    }
+    const videoCount = videos.length;
+    const overallAvgViews = videoCount > 0 ? totalViewsAll / videoCount : 0;
+
+    /** @type {Record<string, { tag: string, totalViews: number, uses: number }>} */
+    const hashtagMap = {};
+
+    for (const v of videos) {
+      const views = Number(v.view_count ?? 0);
+      if (!Number.isFinite(views) || views <= 0) continue;
+
+      const text = `${v.title || ""} ${v.description || ""}`;
+      const matches = text.match(/#[\p{L}\p{N}_]+/gu);
+      if (!matches) continue;
+
+      const uniqueTags = Array.from(new Set(matches.map((t) => t.trim()))).filter(Boolean);
+      for (const rawTag of uniqueTags) {
+        const tag = rawTag.startsWith("#") ? rawTag : `#${rawTag}`;
+        if (!hashtagMap[tag]) {
+          hashtagMap[tag] = { tag, totalViews: 0, uses: 0 };
+        }
+        hashtagMap[tag].totalViews += views;
+        hashtagMap[tag].uses += 1;
+      }
+    }
+
+    const allHashtags = Object.values(hashtagMap);
+    if (!allHashtags.length || !overallAvgViews) {
+      return res.status(200).json({
+        brandTag: BRAND_HASHTAG,
+        hashtags: [],
+        overallAvgViews: 0
+      });
+    }
+
+    allHashtags.sort((a, b) => {
+      if (b.totalViews !== a.totalViews) return b.totalViews - a.totalViews;
+      return b.uses - a.uses;
+    });
+
+    const enriched = allHashtags.slice(0, 30).map((h) => {
+      const avgViews = h.uses > 0 ? h.totalViews / h.uses : 0;
+      const rawLift = overallAvgViews > 0 ? avgViews / overallAvgViews : 0;
+      const lift = Number.isFinite(rawLift) && rawLift > 0 ? rawLift : 0.1;
+      return {
+        tag: h.tag,
+        lift: Number(Math.max(lift, 0.1).toFixed(2)),
+        uses: h.uses,
+        totalViews: Math.round(h.totalViews),
+        avgViews: Math.round(avgViews)
+      };
+    });
+
+    return res.status(200).json({
+      brandTag: BRAND_HASHTAG,
+      hashtags: enriched,
+      overallAvgViews: Math.round(overallAvgViews)
+    });
+  } catch (err) {
+    console.error("Error in /api/platforms/tiktok/hashtags", err);
+    return res.status(500).json({ message: "Failed to compute TikTok hashtag stats" });
+  }
+});
 
 // Only returns platforms with real live data – no demo/hardcoded fallbacks.
 router.get("/summary", async (req, res) => {
