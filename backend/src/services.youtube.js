@@ -79,7 +79,7 @@ export async function fetchChannelStatsByHandle(rawHandle, apiKey) {
 
 /**
  * Fetch recent videos for a channel and expose their tags/keywords.
- * Returns array of { id, title, tags, viewCount, publishedAt }.
+ * Returns array of { id, title, description, tags, viewCount, publishedAt }.
  */
 export async function fetchChannelVideosWithTags(channelId, apiKey, maxResults = 30) {
   if (!apiKey || !channelId) return [];
@@ -125,6 +125,7 @@ export async function fetchChannelVideosWithTags(channelId, apiKey, maxResults =
   return items.map((v) => ({
     id: v.id,
     title: v.snippet?.title || "",
+    description: v.snippet?.description || "",
     tags: v.snippet?.tags || [],
     viewCount: Number(v.statistics?.viewCount ?? 0),
     publishedAt: v.snippet?.publishedAt || null

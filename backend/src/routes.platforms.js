@@ -328,9 +328,19 @@ router.get("/youtube/keywords", async (req, res) => {
       const views = Number(v.viewCount ?? 0);
       if (!Number.isFinite(views) || views <= 0) continue;
 
-      // Prefer explicit tags; if missing (e.g. Shorts / CapCut uploads),
-      // fall back to using the full title as a keyword.
+      // Prefer explicit tags; if missing, fall back to explicit #hashtags
+      // in title + description instead of the full text.
       let rawKeywords = Array.isArray(v.tags) ? v.tags : [];
+
+      if (!rawKeywords || rawKeywords.length === 0) {
+        const text = `${v.title || ""} ${v.description || ""}`;
+        const matches = text.match(/#[\p{L}\p{N}_]+/gu);
+        if (matches && matches.length > 0) {
+          rawKeywords = matches;
+        }
+      }
+
+      // Final fallback: still nothing found, optionally use title as one keyword
       if ((!rawKeywords || rawKeywords.length === 0) && v.title) {
         rawKeywords = [v.title];
       }
@@ -617,8 +627,16 @@ router.get("/summary", async (req, res) => {
                 if (!Number.isFinite(vViews) || vViews <= 0) continue;
 
                 // Prefer explicit tags; if missing (e.g. Shorts / CapCut uploads),
-                // fall back to using the full title as a keyword.
+                // fall back to explicit #hashtags in title + description.
                 let rawKeywords = Array.isArray(v.tags) ? v.tags : [];
+                if (!rawKeywords || rawKeywords.length === 0) {
+                  const text = `${v.title || ""} ${v.description || ""}`;
+                  const matches = text.match(/#[\p{L}\p{N}_]+/gu);
+                  if (matches && matches.length > 0) {
+                    rawKeywords = matches;
+                  }
+                }
+
                 if ((!rawKeywords || rawKeywords.length === 0) && v.title) {
                   rawKeywords = [v.title];
                 }
