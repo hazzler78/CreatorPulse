@@ -50,8 +50,34 @@ export async function fetchArtistStats(rawHandle, clientId, clientSecret) {
   if (!data) return null;
 
   return {
+    id: data.id || artistId,
     name: data.name || rawHandle,
     followers: Number(data.followers?.total ?? 0),
     popularity: Number(data.popularity ?? 0)
   };
+}
+
+/**
+ * Fetch an artist's top tracks for a given market.
+ * Returns array of { id, name, popularity, previewUrl }.
+ */
+export async function fetchArtistTopTracks(rawHandle, clientId, clientSecret, market = "DE") {
+  const artistId = extractArtistId(rawHandle);
+  if (!artistId || !clientId || !clientSecret) return [];
+
+  const token = await getClientCredentialsToken(clientId, clientSecret);
+  if (!token) return [];
+
+  const res = await axios.get(`${API_BASE}/artists/${artistId}/top-tracks`, {
+    params: { market },
+    headers: { Authorization: `Bearer ${token}` }
+  });
+
+  const tracks = res.data?.tracks || [];
+  return tracks.map((t) => ({
+    id: t.id,
+    name: t.name || "",
+    popularity: Number(t.popularity ?? 0),
+    previewUrl: t.preview_url || null
+  }));
 }

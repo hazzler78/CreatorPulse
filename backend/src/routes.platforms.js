@@ -1,7 +1,7 @@
 import express from "express";
 import { supabase } from "./config.js";
 import { fetchChannelStatsByHandle, fetchChannelVideosWithTags } from "./services.youtube.js";
-import { fetchArtistStats } from "./services.spotify.js";
+import { fetchArtistStats, fetchArtistTopTracks } from "./services.spotify.js";
 import {
   fetchUserInfo as fetchTikTokUserInfo,
   fetchVideoList as fetchTikTokVideoList,
@@ -737,8 +737,65 @@ router.get("/summary", async (req, res) => {
     }
 
     if (spotifyLiveStats) {
-      const { name, followers, popularity } = spotifyLiveStats;
+      const { id: artistId, name, followers, popularity } = spotifyLiveStats;
       const approxRevenue = Math.round((followers / 1000) * 2 + (popularity / 10));
+
+      // Try to understand which tracks are carrying momentum
+      let spotifyHashtags = [];
+      let topTrackLabel = `Total followers · "${name}"`;
+      try {
+        if (spotifyClientId && spotifyClientSecret && artistId) {
+          const tracks = await fetchArtistTopTracks(
+            artistId,
+            spotifyClientId,
+            spotifyClientSecret,
+            "DE"
+          );
+          if (tracks.length) {
+            // Use popularity as proxy for momentum
+            let totalPopularity = 0;
+            for (const t of tracks) {
+              totalPopularity += Math.max(Number(t.popularity ?? 0), 0);
+            }
+            const trackCount = tracks.length;
+            const avgPopularity = trackCount > 0 ? totalPopularity / trackCount : 0;
+
+            if (avgPopularity) {
+              spotifyHashtags = tracks.slice(0, 8).map((t) => {
+                const rawLift =
+                  avgPopularity > 0 ? Number(t.popularity ?? 0) / avgPopularity : 0;
+                const lift = Number.isFinite(rawLift) && rawLift > 0 ? rawLift : 0.1;
+                const compact = String(t.name || "").toLowerCase().replace(/\s+/g, "");
+                return {
+                  tag: `#${compact}`,
+                  lift: Number(Math.max(lift, 0.1).toFixed(2))
+                };
+              });
+
+              const topTrack = tracks.reduce(
+                (best, t) =>
+                  Number(t.popularity ?? 0) > Number(best.popularity ?? 0) ? t : best,
+                tracks[0]
+              );
+              if (topTrack?.name) {
+                topTrackLabel = `Top track · "${topTrack.name}"`;
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Spotify top tracks aggregation error:", err?.message || err);
+      }
+
+      if (!spotifyHashtags.length) {
+        spotifyHashtags = [
+          { tag: "#followers", lift: Math.max(followers / 1000, 0.1) },
+          { tag: "#popularity", lift: Math.max(popularity / 25, 0.1) },
+          { tag: "#artist", lift: 1.5 },
+          { tag: "#listentothis", lift: 1.6 }
+        ];
+      }
+
       platforms.push({
         platform: "Spotify",
         handle: name || (spotifyHandle || "").replace(/^@+/, ""),
@@ -749,14 +806,9 @@ router.get("/summary", async (req, res) => {
           engagement: Math.min(popularity / 10, 10),
           engagementChange: 0,
           topPostViews: followers,
-          topPostLabel: `Total followers · "${name}"`
+          topPostLabel: topTrackLabel
         },
-        hashtags: [
-          { tag: "#followers", lift: Math.max(followers / 1000, 0.1) },
-          { tag: "#popularity", lift: Math.max(popularity / 25, 0.1) },
-          { tag: "#artist", lift: 1.5 },
-          { tag: "#listentothis", lift: 1.6 }
-        ],
+        hashtags: spotifyHashtags,
         engagementTrend: [3.0, 3.2, 3.6, 3.9, 4.4, 4.7, 4.3]
       });
     }
