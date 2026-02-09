@@ -665,8 +665,9 @@ router.get("/summary", async (req, res) => {
                 const avgViews = k.uses > 0 ? k.totalViews / k.uses : 0;
                 const rawLift = overallAvgViews > 0 ? avgViews / overallAvgViews : 0;
                 const lift = Number.isFinite(rawLift) && rawLift > 0 ? rawLift : 0.1;
-                // Render as hashtag-style label, compacting spaces
-                const compact = k.keyword.replace(/\s+/g, "");
+                // Render as hashtag-style label, compacting spaces; avoid double '#'
+                const base = k.keyword.replace(/^#+/, "").trim();
+                const compact = base.replace(/\s+/g, "");
                 return {
                   tag: `#${compact}`,
                   lift: Number(Math.max(lift, 0.1).toFixed(2))
@@ -765,9 +766,10 @@ router.get("/summary", async (req, res) => {
                 const rawLift =
                   avgPopularity > 0 ? Number(t.popularity ?? 0) / avgPopularity : 0;
                 const lift = Number.isFinite(rawLift) && rawLift > 0 ? rawLift : 0.1;
-                const compact = String(t.name || "").toLowerCase().replace(/\s+/g, "");
+                // Show readable song names instead of hashtags
+                const nameLabel = t.name || "";
                 return {
-                  tag: `#${compact}`,
+                  tag: nameLabel,
                   lift: Number(Math.max(lift, 0.1).toFixed(2))
                 };
               });
