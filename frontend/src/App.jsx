@@ -10,6 +10,7 @@ import Onboarding from "./components/Onboarding.jsx";
 import ConnectedAccounts from "./components/ConnectedAccounts.jsx";
 import AddPlatform from "./components/AddPlatform.jsx";
 import HashtagSuggestions from "./components/HashtagSuggestions.jsx";
+import MomentumMilestones from "./components/MomentumMilestones.jsx";
 
 function useTheme() {
   const [theme, setTheme] = useState("dark");
@@ -221,7 +222,7 @@ export default function App() {
     currentPage === "accounts"
       ? "See which platforms are connected and manage integrations."
       : currentPage === "goals"
-      ? "Stay aligned with your monthly revenue goals and creator targets."
+      ? "Track momentum and milestones while you build — revenue follows."
       : currentPage === "reports"
       ? "Review trends and simulations to decide your next experiments."
       : "Stay aligned with your monthly revenue goals, ad momentum and platform health in one calm view.";
@@ -353,9 +354,10 @@ export default function App() {
                 previousRevenue={goal.previousRevenue}
                 growthTargetPercent={goal.growthTargetPercent}
               />
+              <MomentumMilestones platforms={platforms} />
               <p className="text-xs text-slate-400 max-w-md">
-                Justera dina mål genom att starta om onboarding, eller använd
-                nuvarande siffror som kompass för dina nästa steg.
+                Adjust your targets by restarting onboarding, or use these numbers
+                as a compass for your next steps.
               </p>
             </>
           )}

@@ -566,7 +566,8 @@ router.get("/summary", async (req, res) => {
           engagement: Number(engagementRate.toFixed(1)),
           engagementChange: 0,
           topPostViews,
-          topPostLabel
+          topPostLabel,
+          followerCount: follower_count
         },
         hashtags: realHashtagStats.length > 0 ? realHashtagStats : fallbackHashtags,
         engagementTrend: [3.2, 3.8, 4.4, 4.1, 4.9, 5.3, 4.7]
@@ -700,7 +701,9 @@ router.get("/summary", async (req, res) => {
           engagement: Number(engagementRate.toFixed(1)),
           engagementChange: 0,
           topPostViews: Number(views),
-          topPostLabel: `Total channel views · "${title}"`
+          topPostLabel: `Total channel views · "${title}"`,
+          subscriberCount: subscribers,
+          videoCount: videos
         },
         hashtags: youtubeHashtags,
         engagementTrend: [2.8, 3.1, 3.6, 3.9, 4.2, 4.5, 4.9]
@@ -744,6 +747,7 @@ router.get("/summary", async (req, res) => {
       // Try to understand which tracks are carrying momentum
       let spotifyHashtags = [];
       let topTrackLabel = `Total followers · "${name}"`;
+      let topTrackPopularity = null;
       try {
         if (spotifyClientId && spotifyClientSecret && artistId) {
           const tracks = await fetchArtistTopTracks(
@@ -782,6 +786,9 @@ router.get("/summary", async (req, res) => {
               if (topTrack?.name) {
                 topTrackLabel = `Top track · "${topTrack.name}"`;
               }
+              if (topTrack) {
+                topTrackPopularity = Number(topTrack.popularity ?? 0);
+              }
             }
           }
         }
@@ -808,7 +815,8 @@ router.get("/summary", async (req, res) => {
           engagement: Math.min(popularity / 10, 10),
           engagementChange: 0,
           topPostViews: followers,
-          topPostLabel: topTrackLabel
+          topPostLabel: topTrackLabel,
+          ...(topTrackPopularity != null && { topTrackPopularity })
         },
         hashtags: spotifyHashtags,
         engagementTrend: [3.0, 3.2, 3.6, 3.9, 4.4, 4.7, 4.3]

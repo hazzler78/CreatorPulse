@@ -68,19 +68,24 @@ export default function GoalCard({
         </p>
 
         <div className="space-y-3">
-          <div className="flex items-center justify-between text-xs md:text-sm text-slate-300">
-            <span>Revenue so far</span>
-            <span>
-              <span className="font-semibold">
-                {formatCurrency(currentRevenue)}
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center justify-between text-xs md:text-sm text-slate-300">
+              <span>Estimated revenue</span>
+              <span>
+                <span className="font-semibold">
+                  {formatCurrency(currentRevenue)}
+                </span>
+                {hasBaseline && (
+                  <>
+                    <span className="mx-1 text-slate-500">/</span>
+                    {formatCurrency(previousRevenue)} last month
+                  </>
+                )}
               </span>
-              {hasBaseline && (
-                <>
-                  <span className="mx-1 text-slate-500">/</span>
-                  {formatCurrency(previousRevenue)} last month
-                </>
-              )}
-            </span>
+            </div>
+            <p className="text-[10px] text-slate-500">
+              Spotify via DistroKid & future monetization — real payouts may lag.
+            </p>
           </div>
           <div className="h-3 rounded-full bg-slate-800 overflow-hidden">
             <motion.div
