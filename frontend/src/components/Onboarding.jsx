@@ -2,10 +2,9 @@ import { useState } from "react";
 import { apiFetch } from "../api.js";
 
 const PLATFORMS = [
-  { id: "tiktok", label: "TikTok" },
-  { id: "facebook", label: "Facebook" },
-  { id: "youtube", label: "YouTube" },
-  { id: "spotify", label: "Spotify" }
+  { id: "tiktok", label: "TikTok", connectHint: "Koppla i dashboard efter setup" },
+  { id: "youtube", label: "YouTube", placeholder: "@kanalnamn eller kanal-ID" },
+  { id: "spotify", label: "Spotify", placeholder: "Artistnamn eller ID" }
 ];
 
 export default function Onboarding({ onComplete }) {
@@ -15,7 +14,7 @@ export default function Onboarding({ onComplete }) {
 
   const [selectedPlatforms, setSelectedPlatforms] = useState(() =>
     PLATFORMS.reduce(
-      (acc, p) => ({ ...acc, [p.id]: { enabled: p.id === "tiktok" || p.id === "facebook", handle: "" } }),
+      (acc, p) => ({ ...acc, [p.id]: { enabled: p.id === "tiktok", handle: "" } }),
       {}
     )
   );
@@ -41,22 +40,24 @@ export default function Onboarding({ onComplete }) {
 
     try {
       await Promise.all(
-        enabled.map((p) =>
-          apiFetch("/api/accounts", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              platform: p.id,
-              handle:
-                selectedPlatforms[p.id]?.handle?.trim() ||
-                `@${p.id}-demo`,
-              mode: "demo"
-            })
+        enabled
+          .filter((p) => p.id === "tiktok" || (selectedPlatforms[p.id]?.handle?.trim() ?? "").length > 0)
+          .map((p) => {
+            if (p.id === "tiktok") return null;
+            return apiFetch("/api/accounts", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                platform: p.id,
+                handle: selectedPlatforms[p.id]?.handle?.trim() || "",
+                mode: "connected"
+              })
+            });
           })
-        )
+          .filter(Boolean)
       );
     } catch {
-      // Backend may be unreachable – proceed anyway; data loads from API later
+      // Backend may be unreachable – proceed anyway
     }
 
     const stageDefaults = { early: 50, steady: 30, mature: 15 };
@@ -67,7 +68,7 @@ export default function Onboarding({ onComplete }) {
     };
 
     if (onComplete) {
-      onComplete(goal, enabled);
+      onComplete(goal);
     }
     setSaving(false);
   };
@@ -216,8 +217,7 @@ export default function Onboarding({ onComplete }) {
               Which platforms do you want CreatorPulse to track?
             </h2>
             <p className="text-[11px] text-slate-400">
-              For now we&apos;ll connect them in demo mode so you can feel the flow.
-              Later, we&apos;ll swap this to real OAuth connections.
+              Koppla TikTok via OAuth i dashboard. Lägg till YouTube/Spotify med ditt kanal- eller artistnamn.
             </p>
             <div className="space-y-2">
               {PLATFORMS.map((p) => {
@@ -233,10 +233,11 @@ export default function Onboarding({ onComplete }) {
                       </div>
                       <input
                         type="text"
-                        placeholder={`@${p.id} handle / channel`}
+                        placeholder={p.placeholder || `@${p.id}`}
                         value={state?.handle || ""}
                         onChange={(e) => updateHandle(p.id, e.target.value)}
-                        className="mt-1 w-full rounded-lg bg-slate-950 border border-slate-700 px-2 py-1.5 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                        disabled={p.id === "tiktok"}
+                        className="mt-1 w-full rounded-lg bg-slate-950 border border-slate-700 px-2 py-1.5 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-emerald-500 disabled:opacity-60 disabled:cursor-not-allowed"
                       />
                     </div>
                     <button

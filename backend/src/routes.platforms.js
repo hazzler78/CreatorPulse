@@ -13,16 +13,79 @@ const router = express.Router();
 const TIKTOK_CLIENT_KEY = process.env.TIKTOK_CLIENT_KEY;
 const TIKTOK_CLIENT_SECRET = process.env.TIKTOK_CLIENT_SECRET;
 
-// In a real app, fetch TikTok, Facebook, YouTube & Spotify analytics via their APIs.
-// Here we return a shaped demo response so the frontend can render, with optional
-// live YouTube channel stats when a YOUTUBE_API_KEY is configured.
+/**
+ * Compute top-performing hashtags from a list of TikTok videos.
+ * Each video is expected to have: { title, description, view_count }.
+ * Returns array of { tag, lift } where lift is the average views for
+ * videos using that hashtag vs the overall average views.
+ */
+function computeTikTokHashtagStats(videos = []) {
+  if (!Array.isArray(videos) || videos.length === 0) return [];
+
+  let totalViewsAll = 0;
+  for (const v of videos) {
+    const views = Number(v.view_count ?? 0);
+    if (!Number.isFinite(views)) continue;
+    totalViewsAll += Math.max(views, 0);
+  }
+
+  const videoCount = videos.length;
+  const overallAvgViews = videoCount > 0 ? totalViewsAll / videoCount : 0;
+  if (!overallAvgViews) return [];
+
+  /** @type {Record<string, { tag: string, totalViews: number, uses: number }>} */
+  const hashtagMap = {};
+
+  for (const v of videos) {
+    const views = Number(v.view_count ?? 0);
+    if (!Number.isFinite(views) || views <= 0) continue;
+
+    const text = `${v.title || ""} ${v.description || ""}`;
+    const matches = text.match(/#[\p{L}\p{N}_]+/gu);
+    if (!matches) continue;
+
+    // Deduplicate per video so a tag repeated in the same caption doesn't overcount "uses"
+    const uniqueTags = Array.from(new Set(matches.map((t) => t.trim()))).filter(Boolean);
+    for (const rawTag of uniqueTags) {
+      const tag = rawTag.startsWith("#") ? rawTag : `#${rawTag}`;
+      if (!hashtagMap[tag]) {
+        hashtagMap[tag] = { tag, totalViews: 0, uses: 0 };
+      }
+      hashtagMap[tag].totalViews += views;
+      hashtagMap[tag].uses += 1;
+    }
+  }
+
+  const allHashtags = Object.values(hashtagMap);
+  if (!allHashtags.length) return [];
+
+  // Sort by total views contributed, then by uses as tiebreaker
+  allHashtags.sort((a, b) => {
+    if (b.totalViews !== a.totalViews) return b.totalViews - a.totalViews;
+    return b.uses - a.uses;
+  });
+
+  const top = allHashtags.slice(0, 8);
+  return top.map((h) => {
+    const avgForTag = h.uses > 0 ? h.totalViews / h.uses : 0;
+    const rawLift = overallAvgViews > 0 ? avgForTag / overallAvgViews : 0;
+    const lift = Number.isFinite(rawLift) && rawLift > 0 ? rawLift : 0.1;
+    return {
+      tag: h.tag,
+      lift: Number(Math.max(lift, 0.1).toFixed(2))
+    };
+  });
+}
+
+// Only returns platforms with real live data – no demo/hardcoded fallbacks.
 router.get("/summary", async (req, res) => {
   try {
     const userId = req.user?.sub || "demo-user";
+    const platforms = [];
 
-    // TikTok: live stats when account has access_token (from OAuth)
+    // TikTok: only when OAuth connected and API returns data
     let tiktokLiveStats = null;
-    let tiktokHandle = "mikachristina";
+    let tiktokHandle = "";
     if (supabase) {
       const { data: ttAccount } = await supabase
         .from("platform_accounts")
@@ -34,9 +97,6 @@ router.get("/summary", async (req, res) => {
       if (ttAccount?.handle) tiktokHandle = ttAccount.handle;
       let accessToken = ttAccount?.access_token || null;
       const refreshToken = ttAccount?.refresh_token || null;
-      const tokenExpiresAt = ttAccount?.token_expires_at
-        ? new Date(ttAccount.token_expires_at).getTime()
-        : 0;
 
       if (accessToken) {
         try {
@@ -75,30 +135,7 @@ router.get("/summary", async (req, res) => {
       }
     }
 
-    const tiktokMetrics = (() => {
-      const displayHandle = (tiktokHandle || "").replace(/^@+/, "");
-      if (!tiktokLiveStats) {
-        return {
-          platform: "TikTok",
-          handle: displayHandle || "mikachristina",
-          _live: false,
-          metrics: {
-            revenue: 1800,
-            revenueChange: 24.3,
-            engagement: 5.2,
-            engagementChange: 1.1,
-            topPostViews: 42000,
-            topPostLabel: "Top: 'Day in the studio'"
-          },
-          hashtags: [
-            { tag: "#creatorlife", lift: 3.4 },
-            { tag: "#smallcreators", lift: 2.7 },
-            { tag: "#tiktoksweden", lift: 2.2 },
-            { tag: "#dailyvlog", lift: 1.9 }
-          ],
-          engagementTrend: [3.2, 3.8, 4.4, 4.1, 4.9, 5.3, 4.7]
-        };
-      }
+    if (tiktokLiveStats) {
       const {
         username,
         display_name,
@@ -112,7 +149,6 @@ router.get("/summary", async (req, res) => {
         video_count && likes_count
           ? Math.min((likes_count / (video_count * 100)) * 10, 15)
           : 2.5;
-      // Use real view_count from video list when available; fallback to approximation
       const topVideo = videos.length > 0
         ? videos.reduce((a, b) => (a.view_count >= b.view_count ? a : b), videos[0])
         : null;
@@ -122,9 +158,19 @@ router.get("/summary", async (req, res) => {
             ? `Live · "${topVideo.title.slice(0, 30)}${topVideo.title.length > 30 ? "…" : ""}"`
             : `Live · Top post (${display_name || username})`)
         : `Live · "${display_name || username}"`;
-      return {
+
+      // Derive hashtag performance from real video captions
+      const realHashtagStats = computeTikTokHashtagStats(videos);
+      const fallbackHashtags = [
+        { tag: "#followers", lift: Math.max(follower_count / 1000, 0.1) },
+        { tag: "#likes", lift: Math.max(likes_count / 10000, 0.1) },
+        { tag: "#videos", lift: Math.max(video_count / 20, 0.1) },
+        { tag: "#tiktokgrowth", lift: 1.5 }
+      ];
+
+      platforms.push({
         platform: "TikTok",
-        handle: username || displayHandle || display_name,
+        handle: username || (tiktokHandle || "").replace(/^@+/, "") || display_name,
         _live: true,
         metrics: {
           revenue: Math.max(approxRevenue, 0),
@@ -134,17 +180,13 @@ router.get("/summary", async (req, res) => {
           topPostViews,
           topPostLabel
         },
-        hashtags: [
-          { tag: "#followers", lift: Math.max(follower_count / 1000, 0.1) },
-          { tag: "#likes", lift: Math.max(likes_count / 10000, 0.1) },
-          { tag: "#videos", lift: Math.max(video_count / 20, 0.1) },
-          { tag: "#tiktokgrowth", lift: 1.5 }
-        ],
+        hashtags: realHashtagStats.length > 0 ? realHashtagStats : fallbackHashtags,
         engagementTrend: [3.2, 3.8, 4.4, 4.1, 4.9, 5.3, 4.7]
-      };
-    })();
+      });
+    }
 
-    let youtubeHandle = "VelvetOrionX";
+    // YouTube: only when handle in DB + API returns data
+    let youtubeHandle = "";
     if (supabase) {
       const { data: ytAccount } = await supabase
         .from("platform_accounts")
@@ -152,15 +194,12 @@ router.get("/summary", async (req, res) => {
         .eq("user_id", userId)
         .eq("platform", "youtube")
         .maybeSingle();
-
-      if (ytAccount?.handle) {
-        youtubeHandle = ytAccount.handle;
-      }
+      if (ytAccount?.handle) youtubeHandle = ytAccount.handle;
     }
 
     let youtubeLiveStats = null;
     const apiKey = process.env.YOUTUBE_API_KEY;
-    if (apiKey) {
+    if (apiKey && youtubeHandle) {
       try {
         youtubeLiveStats = await fetchChannelStatsByHandle(youtubeHandle, apiKey);
         if (!youtubeLiveStats) {
@@ -169,42 +208,14 @@ router.get("/summary", async (req, res) => {
       } catch (err) {
         console.error("YouTube API error:", err?.response?.data || err.message);
       }
-    } else {
-      console.warn("YOUTUBE_API_KEY not set; using demo YouTube data.");
     }
 
-    const youtubeMetrics = (() => {
-      if (!youtubeLiveStats) {
-        // fall back to demo numbers
-        return {
-          platform: "YouTube",
-          handle: youtubeHandle,
-          _live: false,
-          metrics: {
-            revenue: 1200,
-            revenueChange: 18.5,
-            engagement: 6.1,
-            engagementChange: 1.3,
-            topPostViews: 58000,
-            topPostLabel: "Top: 'Long-form breakdown'"
-          },
-          hashtags: [
-            { tag: "#longform", lift: 2.9 },
-            { tag: "#tutorial", lift: 2.4 },
-            { tag: "#ytshorts", lift: 2.1 },
-            { tag: "#creatorstudio", lift: 1.8 }
-          ],
-          engagementTrend: [4.1, 4.4, 4.9, 5.2, 5.8, 6.3, 6.1]
-        };
-      }
-
+    if (youtubeLiveStats) {
       const { subscribers, views, videos, title } = youtubeLiveStats;
-      const approxRevenue = (views / 1000) * 3; // very rough €3 CPM estimate
+      const approxRevenue = (views / 1000) * 3;
       const engagementRate = subscribers && videos ? (subscribers / videos) * 0.1 : 2.5;
-      // Strip leading @ so the frontend never shows @@
       const displayHandle = (youtubeHandle || "").replace(/^@+/, "");
-
-      return {
+      platforms.push({
         platform: "YouTube",
         handle: displayHandle,
         _live: true,
@@ -223,10 +234,10 @@ router.get("/summary", async (req, res) => {
           { tag: "#youtubegrowth", lift: 1.5 }
         ],
         engagementTrend: [2.8, 3.1, 3.6, 3.9, 4.2, 4.5, 4.9]
-      };
-    })();
+      });
+    }
 
-    // Spotify: live stats when SPOTIFY_CLIENT_ID + SPOTIFY_CLIENT_SECRET are set
+    // Spotify: only when handle in DB + API returns data
     let spotifyHandle = "";
     if (supabase) {
       const { data: spAccount } = await supabase
@@ -237,6 +248,7 @@ router.get("/summary", async (req, res) => {
         .maybeSingle();
       if (spAccount?.handle) spotifyHandle = spAccount.handle;
     }
+
     let spotifyLiveStats = null;
     const spotifyClientId = process.env.SPOTIFY_CLIENT_ID;
     const spotifyClientSecret = process.env.SPOTIFY_CLIENT_SECRET;
@@ -255,35 +267,12 @@ router.get("/summary", async (req, res) => {
       }
     }
 
-    const spotifyMetrics = (() => {
-      const displayHandle = (spotifyHandle || "artist").replace(/^@+/, "");
-      if (!spotifyLiveStats) {
-        return {
-          platform: "Spotify",
-          handle: displayHandle || "mikachristina",
-          _live: false,
-          metrics: {
-            revenue: 500,
-            revenueChange: 12.1,
-            engagement: 4.3,
-            engagementChange: 0.7,
-            topPostViews: 32000,
-            topPostLabel: "Top: 'Playlist collab episode'"
-          },
-          hashtags: [
-            { tag: "#newmusic", lift: 2.6 },
-            { tag: "#podcast", lift: 2.2 },
-            { tag: "#spotifyplaylist", lift: 2.0 },
-            { tag: "#listentothis", lift: 1.6 }
-          ],
-          engagementTrend: [3.0, 3.2, 3.6, 3.9, 4.4, 4.7, 4.3]
-        };
-      }
+    if (spotifyLiveStats) {
       const { name, followers, popularity } = spotifyLiveStats;
       const approxRevenue = Math.round((followers / 1000) * 2 + (popularity / 10));
-      return {
+      platforms.push({
         platform: "Spotify",
-        handle: name || displayHandle,
+        handle: name || (spotifyHandle || "").replace(/^@+/, ""),
         _live: true,
         metrics: {
           revenue: Math.max(approxRevenue, 0),
@@ -300,35 +289,10 @@ router.get("/summary", async (req, res) => {
           { tag: "#listentothis", lift: 1.6 }
         ],
         engagementTrend: [3.0, 3.2, 3.6, 3.9, 4.4, 4.7, 4.3]
-      };
-    })();
+      });
+    }
 
-    return res.json({
-      platforms: [
-        tiktokMetrics,
-        {
-          platform: "Facebook",
-          handle: "mikachristina",
-          metrics: {
-            revenue: 800,
-            revenueChange: 14.7,
-            engagement: 3.4,
-            engagementChange: 0.6,
-            topPostViews: 21000,
-            topPostLabel: "Top: 'Behind the scenes reel'"
-          },
-          hashtags: [
-            { tag: "#community", lift: 2.8 },
-            { tag: "#reels", lift: 2.3 },
-            { tag: "#behindthescenes", lift: 1.8 },
-            { tag: "#creatoreconomy", lift: 1.7 }
-          ],
-          engagementTrend: [2.4, 2.9, 3.1, 3.0, 3.6, 3.9, 3.5]
-        },
-        youtubeMetrics,
-        spotifyMetrics
-      ]
-    });
+    return res.json({ platforms });
   } catch (err) {
     console.error("Error fetching platform summary", err);
     return res.status(500).json({ message: "Failed to fetch platform data" });

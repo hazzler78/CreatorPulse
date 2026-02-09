@@ -62,8 +62,7 @@ export default function GoalCard({
         </h1>
         <p className="text-sm md:text-base text-slate-300 max-w-xl">
           Stay aligned with your target and see exactly how much momentum you
-          need to grow beyond last month across TikTok, Facebook, YouTube and
-          Spotify.
+          need to grow beyond last month across your connected platforms.
         </p>
 
         <div className="space-y-3">

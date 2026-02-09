@@ -108,7 +108,7 @@ export async function fetchUserInfo(accessToken) {
 
 /**
  * Fetch user's video list with view counts. Requires video.list scope.
- * Returns array of { id, title, view_count, create_time } or null.
+ * Returns array of { id, title, view_count, create_time, description } or null.
  */
 export async function fetchVideoList(accessToken, maxCount = 20) {
   if (!accessToken) return null;
@@ -130,7 +130,8 @@ export async function fetchVideoList(accessToken, maxCount = 20) {
       id: v.id,
       title: v.title || v.video_description || "Untitled",
       view_count: Number(v.view_count ?? 0),
-      create_time: v.create_time
+      create_time: v.create_time,
+      description: v.video_description || ""
     }));
   } catch (err) {
     console.warn("TikTok video list error:", err?.response?.data?.message || err.message);

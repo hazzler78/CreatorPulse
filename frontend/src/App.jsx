@@ -8,6 +8,7 @@ import PlatformOverview from "./components/PlatformOverview.jsx";
 import Sidebar from "./components/Sidebar.jsx";
 import Onboarding from "./components/Onboarding.jsx";
 import ConnectedAccounts from "./components/ConnectedAccounts.jsx";
+import AddPlatform from "./components/AddPlatform.jsx";
 
 function useTheme() {
   const [theme, setTheme] = useState("dark");
@@ -48,11 +49,10 @@ export default function App() {
   });
   const [goal, setGoal] = useState({
     previousRevenue: 0,
-    currentRevenue: 2600,
+    currentRevenue: 0,
     growthTargetPercent: 30
   });
   const [platforms, setPlatforms] = useState([]);
-  const [accounts, setAccounts] = useState([]);
   const [loading, setLoading] = useState(false);
   const [tiktokConnecting, setTiktokConnecting] = useState(false);
 
@@ -131,22 +131,18 @@ export default function App() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [goalsRes, platformsRes, accountsRes] = await Promise.all([
+      const [goalsRes, platformsRes] = await Promise.all([
         apiFetch("/api/goals"),
-        apiFetch("/api/platforms/summary"),
-        apiFetch("/api/accounts")
+        apiFetch("/api/platforms/summary")
       ]);
 
       const goalsJson = await goalsRes.json();
       const platformsJson = await platformsRes.json();
-      const accountsJson = await accountsRes.json();
 
       const g = goalsJson.goal || {};
       const allPlatforms = platformsJson.platforms || [];
-      const userAccounts = accountsJson.accounts || [];
 
       setPlatforms(allPlatforms);
-      setAccounts(userAccounts);
 
       const summedRevenue = allPlatforms.reduce(
         (acc, p) => acc + (p.metrics?.revenue || 0),
@@ -158,7 +154,7 @@ export default function App() {
         previousRevenue:
           g.previous_revenue ?? g.previousRevenue ?? prev.previousRevenue,
         currentRevenue:
-          (g.current_revenue ?? g.currentRevenue ?? summedRevenue) || prev.currentRevenue,
+          g.current_revenue ?? g.currentRevenue ?? (summedRevenue > 0 ? summedRevenue : prev.currentRevenue),
         growthTargetPercent:
           g.growth_target_percent ??
           g.growthTargetPercent ??
@@ -207,13 +203,8 @@ export default function App() {
     return <Onboarding onComplete={handleOnboardingComplete} />;
   }
 
-  const connectedPlatformIds = new Set(accounts.map((a) => a.platform));
-  const visiblePlatforms =
-    platforms.length && connectedPlatformIds.size
-      ? platforms.filter((p) => connectedPlatformIds.has(p.platform.toLowerCase()))
-      : platforms.length
-      ? platforms
-      : [];
+  // platforms from API = only live data, no demo
+  const visiblePlatforms = platforms;
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-950 to-slate-950 text-slate-50">
@@ -232,16 +223,18 @@ export default function App() {
               </p>
             </div>
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
-              <ConnectedAccounts onDisconnect={loadData} />
+              <ConnectedAccounts platforms={platforms} onDisconnect={loadData} />
               <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleConnectTiktok}
-                  disabled={tiktokConnecting}
-                  className="hidden md:inline-flex items-center rounded-full border border-slate-700 px-3 py-1.5 text-xs text-slate-200 hover:border-slate-500 transition-colors disabled:opacity-60"
-                >
-                  {tiktokConnecting ? "Redirecting…" : "Connect TikTok"}
-                </button>
+                {!platforms.some((p) => p.platform.toLowerCase() === "tiktok") && (
+                  <button
+                    type="button"
+                    onClick={handleConnectTiktok}
+                    disabled={tiktokConnecting}
+                    className="inline-flex items-center rounded-full border border-emerald-500/50 bg-emerald-500/10 px-3 py-1.5 text-xs text-emerald-200 hover:bg-emerald-500/20 transition-colors disabled:opacity-60"
+                  >
+                    {tiktokConnecting ? "Redirecting…" : "Connect TikTok"}
+                  </button>
+                )}
                 <div className="flex items-center gap-2 rounded-full bg-slate-900/80 border border-slate-800 px-3 py-1.5">
                   <span className="text-[11px] text-slate-300">
                     {user?.email ?? "Demo user"}
@@ -275,7 +268,12 @@ export default function App() {
             }
           />
 
-          <section className="grid grid-cols-1 gap-4 md:gap-5 max-w-3xl">
+          <section className="flex flex-col gap-4 md:gap-5 max-w-3xl">
+            <AddPlatform
+              platforms={platforms}
+              onConnectTiktok={handleConnectTiktok}
+              onAdded={loadData}
+            />
             {visiblePlatforms.map((p) => (
               <PlatformOverview
                 key={p.platform}
@@ -288,13 +286,13 @@ export default function App() {
                   value
                 }))}
                 live={p._live === true}
-                canDisconnect={accounts.some((a) => a.platform === p.platform.toLowerCase())}
+                canDisconnect
                 onDisconnect={handleDisconnectPlatform}
               />
             ))}
             {!loading && visiblePlatforms.length === 0 && (
               <p className="text-xs text-slate-400 col-span-full">
-                Connect at least one platform in onboarding to see detailed cards here.
+                Koppla in minst en plattform ovan för att se dina riktiga siffror.
               </p>
             )}
           </section>
