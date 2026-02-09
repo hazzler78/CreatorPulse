@@ -328,10 +328,16 @@ router.get("/youtube/keywords", async (req, res) => {
       const views = Number(v.viewCount ?? 0);
       if (!Number.isFinite(views) || views <= 0) continue;
 
-      const tags = Array.isArray(v.tags) ? v.tags : [];
-      const unique = Array.from(new Set(tags.map((t) => String(t || "").trim()))).filter(
-        Boolean
-      );
+      // Prefer explicit tags; if missing (e.g. Shorts / CapCut uploads),
+      // fall back to using the full title as a keyword.
+      let rawKeywords = Array.isArray(v.tags) ? v.tags : [];
+      if ((!rawKeywords || rawKeywords.length === 0) && v.title) {
+        rawKeywords = [v.title];
+      }
+
+      const unique = Array.from(
+        new Set(rawKeywords.map((t) => String(t || "").trim()))
+      ).filter(Boolean);
 
       for (const kw of unique) {
         const keyword = kw.toLowerCase();
@@ -610,9 +616,15 @@ router.get("/summary", async (req, res) => {
                 const vViews = Number(v.viewCount ?? 0);
                 if (!Number.isFinite(vViews) || vViews <= 0) continue;
 
-                const tags = Array.isArray(v.tags) ? v.tags : [];
+                // Prefer explicit tags; if missing (e.g. Shorts / CapCut uploads),
+                // fall back to using the full title as a keyword.
+                let rawKeywords = Array.isArray(v.tags) ? v.tags : [];
+                if ((!rawKeywords || rawKeywords.length === 0) && v.title) {
+                  rawKeywords = [v.title];
+                }
+
                 const unique = Array.from(
-                  new Set(tags.map((t) => String(t || "").trim()))
+                  new Set(rawKeywords.map((t) => String(t || "").trim()))
                 ).filter(Boolean);
 
                 for (const kw of unique) {
