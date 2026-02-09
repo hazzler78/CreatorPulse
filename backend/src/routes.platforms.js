@@ -1,6 +1,6 @@
 import express from "express";
 import { supabase } from "./config.js";
-import { fetchChannelStatsByHandle } from "./services.youtube.js";
+import { fetchChannelStatsByHandle, fetchChannelVideosWithTags } from "./services.youtube.js";
 import { fetchArtistStats } from "./services.spotify.js";
 import {
   fetchUserInfo as fetchTikTokUserInfo,
@@ -239,6 +239,143 @@ router.get("/tiktok/hashtags", async (req, res) => {
   } catch (err) {
     console.error("Error in /api/platforms/tiktok/hashtags", err);
     return res.status(500).json({ message: "Failed to compute TikTok hashtag stats" });
+  }
+});
+
+/**
+ * GET /api/platforms/youtube/keywords
+ *
+ * Learns from your own YouTube videos which tags/keywords tend to correlate
+ * with higher views. Uses the channel handle stored in platform_accounts.
+ *
+ * Response:
+ * {
+ *   keywords: [
+ *     { keyword: "studio vlog", lift: 2.1, uses: 4, totalViews: 12000, avgViews: 3000 },
+ *     ...
+ *   ],
+ *   overallAvgViews: 1532
+ * }
+ */
+router.get("/youtube/keywords", async (req, res) => {
+  try {
+    const userId = req.user?.sub || "demo-user";
+
+    if (!supabase) {
+      return res
+        .status(500)
+        .json({ message: "Supabase not configured; cannot load YouTube account." });
+    }
+
+    const { data: ytAccount, error } = await supabase
+      .from("platform_accounts")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("platform", "youtube")
+      .maybeSingle();
+
+    if (error) {
+      console.error("Supabase error loading YouTube account:", error);
+    }
+
+    const youtubeHandle = ytAccount?.handle;
+    const apiKey = process.env.YOUTUBE_API_KEY;
+
+    if (!youtubeHandle || !apiKey) {
+      return res.status(200).json({
+        keywords: [],
+        overallAvgViews: 0
+      });
+    }
+
+    // 1) Get channel id & stats from handle
+    const channelStats = await fetchChannelStatsByHandle(youtubeHandle, apiKey);
+    if (!channelStats?.id) {
+      return res.status(200).json({
+        keywords: [],
+        overallAvgViews: 0
+      });
+    }
+
+    // 2) Get recent videos with tags
+    const videos = await fetchChannelVideosWithTags(channelStats.id, apiKey, 40);
+    if (!videos.length) {
+      return res.status(200).json({
+        keywords: [],
+        overallAvgViews: 0
+      });
+    }
+
+    let totalViewsAll = 0;
+    for (const v of videos) {
+      if (!Number.isFinite(v.viewCount)) continue;
+      totalViewsAll += Math.max(v.viewCount, 0);
+    }
+    const videoCount = videos.length;
+    const overallAvgViews = videoCount > 0 ? totalViewsAll / videoCount : 0;
+
+    if (!overallAvgViews) {
+      return res.status(200).json({
+        keywords: [],
+        overallAvgViews: 0
+      });
+    }
+
+    /** @type {Record<string, { keyword: string, totalViews: number, uses: number }>} */
+    const keywordMap = {};
+
+    for (const v of videos) {
+      const views = Number(v.viewCount ?? 0);
+      if (!Number.isFinite(views) || views <= 0) continue;
+
+      const tags = Array.isArray(v.tags) ? v.tags : [];
+      const unique = Array.from(new Set(tags.map((t) => String(t || "").trim()))).filter(
+        Boolean
+      );
+
+      for (const kw of unique) {
+        const keyword = kw.toLowerCase();
+        if (!keywordMap[keyword]) {
+          keywordMap[keyword] = { keyword, totalViews: 0, uses: 0 };
+        }
+        keywordMap[keyword].totalViews += views;
+        keywordMap[keyword].uses += 1;
+      }
+    }
+
+    const allKeywords = Object.values(keywordMap);
+    if (!allKeywords.length) {
+      return res.status(200).json({
+        keywords: [],
+        overallAvgViews: 0
+      });
+    }
+
+    allKeywords.sort((a, b) => {
+      if (b.totalViews !== a.totalViews) return b.totalViews - a.totalViews;
+      return b.uses - a.uses;
+    });
+
+    const enriched = allKeywords.slice(0, 50).map((k) => {
+      const avgViews = k.uses > 0 ? k.totalViews / k.uses : 0;
+      const rawLift = overallAvgViews > 0 ? avgViews / overallAvgViews : 0;
+      const lift = Number.isFinite(rawLift) && rawLift > 0 ? rawLift : 0.1;
+      return {
+        keyword: k.keyword,
+        lift: Number(Math.max(lift, 0.1).toFixed(2)),
+        uses: k.uses,
+        totalViews: Math.round(k.totalViews),
+        avgViews: Math.round(avgViews)
+      };
+    });
+
+    return res.status(200).json({
+      keywords: enriched,
+      overallAvgViews: Math.round(overallAvgViews)
+    });
+  } catch (err) {
+    console.error("Error in /api/platforms/youtube/keywords", err);
+    return res.status(500).json({ message: "Failed to compute YouTube keyword stats" });
   }
 });
 

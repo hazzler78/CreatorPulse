@@ -69,10 +69,65 @@ export async function fetchChannelStatsByHandle(rawHandle, apiKey) {
   const stats = channel.statistics || {};
 
   return {
+    id: channel.id,
     title: channel.snippet?.title || handle,
     subscribers: Number(stats.subscriberCount || 0),
     views: Number(stats.viewCount || 0),
     videos: Number(stats.videoCount || 0)
   };
+}
+
+/**
+ * Fetch recent videos for a channel and expose their tags/keywords.
+ * Returns array of { id, title, tags, viewCount, publishedAt }.
+ */
+export async function fetchChannelVideosWithTags(channelId, apiKey, maxResults = 30) {
+  if (!apiKey || !channelId) return [];
+
+  // 1) Find uploads playlist for the channel
+  const playlistsRes = await axios.get(`${API_BASE}/channels`, {
+    params: {
+      part: "contentDetails",
+      id: channelId,
+      key: apiKey
+    }
+  });
+  const playlistId =
+    playlistsRes.data?.items?.[0]?.contentDetails?.relatedPlaylists?.uploads || null;
+  if (!playlistId) return [];
+
+  // 2) List recent videos from uploads playlist
+  const playlistItemsRes = await axios.get(`${API_BASE}/playlistItems`, {
+    params: {
+      part: "contentDetails",
+      playlistId,
+      maxResults: Math.min(maxResults, 50),
+      key: apiKey
+    }
+  });
+
+  const videoIds = (playlistItemsRes.data?.items || [])
+    .map((item) => item.contentDetails?.videoId)
+    .filter(Boolean);
+
+  if (!videoIds.length) return [];
+
+  // 3) Fetch video details including tags and stats
+  const videosRes = await axios.get(`${API_BASE}/videos`, {
+    params: {
+      part: "snippet,statistics",
+      id: videoIds.join(","),
+      key: apiKey
+    }
+  });
+
+  const items = videosRes.data?.items || [];
+  return items.map((v) => ({
+    id: v.id,
+    title: v.snippet?.title || "",
+    tags: v.snippet?.tags || [],
+    viewCount: Number(v.statistics?.viewCount ?? 0),
+    publishedAt: v.snippet?.publishedAt || null
+  }));
 }
 
