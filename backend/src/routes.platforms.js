@@ -379,6 +379,76 @@ router.get("/youtube/keywords", async (req, res) => {
   }
 });
 
+/**
+ * GET /api/platforms/youtube/debug
+ *
+ * Lightweight debug endpoint to verify that:
+ * - YOUTUBE_API_KEY is present on the backend
+ * - a YouTube channel can be resolved from the stored handle
+ * - recent videos + tags can be fetched
+ *
+ * Does NOT return the API key itself.
+ */
+router.get("/youtube/debug", async (req, res) => {
+  try {
+    const userId = req.user?.sub || "demo-user";
+
+    if (!supabase) {
+      return res.status(200).json({
+        supabase: false,
+        apiKeySet: !!process.env.YOUTUBE_API_KEY,
+        message: "Supabase not configured in this environment."
+      });
+    }
+
+    const apiKey = process.env.YOUTUBE_API_KEY;
+    const { data: ytAccount } = await supabase
+      .from("platform_accounts")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("platform", "youtube")
+      .maybeSingle();
+
+    const youtubeHandle = ytAccount?.handle || null;
+
+    if (!apiKey || !youtubeHandle) {
+      return res.status(200).json({
+        supabase: true,
+        apiKeySet: !!apiKey,
+        youtubeHandle,
+        channelResolved: false,
+        videosChecked: 0
+      });
+    }
+
+    const channelStats = await fetchChannelStatsByHandle(youtubeHandle, apiKey);
+    if (!channelStats?.id) {
+      return res.status(200).json({
+        supabase: true,
+        apiKeySet: true,
+        youtubeHandle,
+        channelResolved: false,
+        videosChecked: 0
+      });
+    }
+
+    const videos = await fetchChannelVideosWithTags(channelStats.id, apiKey, 5);
+
+    return res.status(200).json({
+      supabase: true,
+      apiKeySet: true,
+      youtubeHandle,
+      channelResolved: true,
+      channelId: channelStats.id,
+      videosChecked: videos.length,
+      sampleVideoHasTags: videos.some((v) => Array.isArray(v.tags) && v.tags.length > 0)
+    });
+  } catch (err) {
+    console.error("Error in /api/platforms/youtube/debug", err);
+    return res.status(500).json({ message: "YouTube debug failed" });
+  }
+});
+
 // Only returns platforms with real live data – no demo/hardcoded fallbacks.
 router.get("/summary", async (req, res) => {
   try {
