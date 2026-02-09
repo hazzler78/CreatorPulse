@@ -1,20 +1,32 @@
 /**
- * Building-phase milestones: progress that matters before monetization.
- * Uses platform data (followers, views, hashtag lift, top track) to show
- * checkmarks for achieved milestones.
+ * Building-phase milestones: tuned for small, steady growth (e.g. ~0.8 TikTok
+ * followers/day, ~1 YouTube sub per upload). Early wins first; bigger targets later.
  */
 const MILESTONES = [
+  // TikTok — starter targets (weeks to a few months at ~0.8/day)
   {
     platform: "TikTok",
-    id: "tiktok-1k",
-    label: "1K followers",
-    check: (p) => p.platform === "TikTok" && (p.metrics?.followerCount ?? 0) >= 1000
+    id: "tiktok-50",
+    label: "50 followers",
+    check: (p) => p.platform === "TikTok" && (p.metrics?.followerCount ?? 0) >= 50
   },
   {
     platform: "TikTok",
-    id: "tiktok-10k-views",
-    label: "Top video 10K+ views",
-    check: (p) => p.platform === "TikTok" && (p.metrics?.topPostViews ?? 0) >= 10000
+    id: "tiktok-100",
+    label: "100 followers",
+    check: (p) => p.platform === "TikTok" && (p.metrics?.followerCount ?? 0) >= 100
+  },
+  {
+    platform: "TikTok",
+    id: "tiktok-1k-views",
+    label: "A video with 1K+ views",
+    check: (p) => p.platform === "TikTok" && (p.metrics?.topPostViews ?? 0) >= 1000
+  },
+  {
+    platform: "TikTok",
+    id: "tiktok-5k-views",
+    label: "A video with 5K+ views",
+    check: (p) => p.platform === "TikTok" && (p.metrics?.topPostViews ?? 0) >= 5000
   },
   {
     platform: "TikTok",
@@ -24,6 +36,60 @@ const MILESTONES = [
       p.platform === "TikTok" &&
       Array.isArray(p.hashtags) &&
       p.hashtags.some((h) => Number(h.lift) >= 2)
+  },
+  // TikTok — next tier
+  {
+    platform: "TikTok",
+    id: "tiktok-250",
+    label: "250 followers",
+    check: (p) => p.platform === "TikTok" && (p.metrics?.followerCount ?? 0) >= 250
+  },
+  {
+    platform: "TikTok",
+    id: "tiktok-500",
+    label: "500 followers",
+    check: (p) => p.platform === "TikTok" && (p.metrics?.followerCount ?? 0) >= 500
+  },
+  {
+    platform: "TikTok",
+    id: "tiktok-10k-views",
+    label: "A video with 10K+ views",
+    check: (p) => p.platform === "TikTok" && (p.metrics?.topPostViews ?? 0) >= 10000
+  },
+  // YouTube — ~1 sub per upload; views can grow with Shorts
+  {
+    platform: "YouTube",
+    id: "yt-10-subs",
+    label: "10 subscribers",
+    check: (p) => p.platform === "YouTube" && (p.metrics?.subscriberCount ?? 0) >= 10
+  },
+  {
+    platform: "YouTube",
+    id: "yt-25-subs",
+    label: "25 subscribers",
+    check: (p) => p.platform === "YouTube" && (p.metrics?.subscriberCount ?? 0) >= 25
+  },
+  {
+    platform: "YouTube",
+    id: "yt-1k-views",
+    label: "1K+ channel views",
+    check: (p) => p.platform === "YouTube" && (p.metrics?.topPostViews ?? 0) >= 1000
+  },
+  {
+    platform: "YouTube",
+    id: "yt-top-tags",
+    label: "3+ top-performing tags",
+    check: (p) =>
+      p.platform === "YouTube" &&
+      Array.isArray(p.hashtags) &&
+      p.hashtags.length >= 3
+  },
+  // YouTube — next tier
+  {
+    platform: "YouTube",
+    id: "yt-50-subs",
+    label: "50 subscribers",
+    check: (p) => p.platform === "YouTube" && (p.metrics?.subscriberCount ?? 0) >= 50
   },
   {
     platform: "YouTube",
@@ -37,22 +103,7 @@ const MILESTONES = [
     label: "5K+ channel views",
     check: (p) => p.platform === "YouTube" && (p.metrics?.topPostViews ?? 0) >= 5000
   },
-  {
-    platform: "YouTube",
-    id: "yt-top-tags",
-    label: "3+ top-performing tags",
-    check: (p) =>
-      p.platform === "YouTube" &&
-      Array.isArray(p.hashtags) &&
-      p.hashtags.length >= 3
-  },
-  {
-    platform: "Spotify",
-    id: "spotify-top-50",
-    label: "Top track 50+ popularity",
-    check: (p) =>
-      p.platform === "Spotify" && (p.metrics?.topTrackPopularity ?? 0) >= 50
-  },
+  // Spotify
   {
     platform: "Spotify",
     id: "spotify-catalog",
@@ -61,6 +112,13 @@ const MILESTONES = [
       p.platform === "Spotify" &&
       Array.isArray(p.hashtags) &&
       p.hashtags.length > 0
+  },
+  {
+    platform: "Spotify",
+    id: "spotify-top-50",
+    label: "Top track 50+ popularity",
+    check: (p) =>
+      p.platform === "Spotify" && (p.metrics?.topTrackPopularity ?? 0) >= 50
   }
 ];
 
@@ -77,8 +135,8 @@ export default function MomentumMilestones({ platforms = [] }) {
           Building momentum
         </h2>
         <p className="text-[11px] md:text-xs text-slate-400 mt-0.5">
-          Progress that counts even before monetization. Real payouts (e.g. Spotify via
-          DistroKid) can lag — these milestones show you’re moving.
+          Tuned for steady growth (e.g. ~0.8 TikTok followers/day, ~1 YouTube sub per
+          upload). Real payouts can lag — these wins show you’re moving.
         </p>
       </div>
 
