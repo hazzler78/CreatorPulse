@@ -55,6 +55,7 @@ export default function App() {
   const [platforms, setPlatforms] = useState([]);
   const [loading, setLoading] = useState(false);
   const [tiktokConnecting, setTiktokConnecting] = useState(false);
+  const [currentPage, setCurrentPage] = useState("progress");
 
   // Reset onboarded check when user changes
   useEffect(() => {
@@ -206,21 +207,41 @@ export default function App() {
   // platforms from API = only live data, no demo
   const visiblePlatforms = platforms;
 
+  const pageTitle =
+    currentPage === "accounts"
+      ? "Connected accounts"
+      : currentPage === "goals"
+      ? "Goals overview"
+      : currentPage === "reports"
+      ? "Reports & experiments"
+      : "Progress hub";
+
+  const pageSubtitle =
+    currentPage === "accounts"
+      ? "See which platforms are connected and manage integrations."
+      : currentPage === "goals"
+      ? "Stay aligned with your monthly revenue goals and creator targets."
+      : currentPage === "reports"
+      ? "Review trends and simulations to decide your next experiments."
+      : "Stay aligned with your monthly revenue goals, ad momentum and platform health in one calm view.";
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-950 to-slate-950 text-slate-50">
       <div className="max-w-6xl mx-auto px-4 py-5 md:py-8 flex gap-5">
-        <Sidebar onToggleTheme={toggleTheme} onRestartOnboarding={handleRestartOnboarding} />
+        <Sidebar
+          currentPage={currentPage}
+          onToggleTheme={toggleTheme}
+          onRestartOnboarding={handleRestartOnboarding}
+          onNavigate={setCurrentPage}
+        />
 
         <main className="flex-1 space-y-5 md:space-y-6">
           <header className="flex flex-col gap-3">
             <div>
               <h1 className="text-xl md:text-2xl font-semibold tracking-tight">
-                Progress hub
+                {pageTitle}
               </h1>
-              <p className="text-xs md:text-sm text-slate-300">
-                Stay aligned with your monthly revenue goals, ad momentum and
-                platform health in one calm view.
-              </p>
+              <p className="text-xs md:text-sm text-slate-300">{pageSubtitle}</p>
             </div>
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
               <ConnectedAccounts platforms={platforms} onDisconnect={loadData} />
@@ -253,49 +274,128 @@ export default function App() {
             </div>
           </header>
 
-          <GoalCard
-            currentRevenue={goal.currentRevenue}
-            previousRevenue={goal.previousRevenue}
-            growthTargetPercent={goal.growthTargetPercent}
-          />
-
-          <AdSimulator
-            baseRevenue={goal.currentRevenue}
-            baseAdSpend={600}
-            targetRevenue={
-              goal.currentRevenue *
-              (1 + (goal.growthTargetPercent || 30) / 100)
-            }
-          />
-
-          <section className="flex flex-col gap-4 md:gap-5 max-w-3xl">
-            <AddPlatform
-              platforms={platforms}
-              onConnectTiktok={handleConnectTiktok}
-              onAdded={loadData}
-            />
-            {visiblePlatforms.map((p) => (
-              <PlatformOverview
-                key={p.platform}
-                platform={p.platform}
-                handle={p.handle}
-                metrics={p.metrics}
-                hashtagStats={p.hashtags}
-                engagementTrend={(p.engagementTrend || []).map((value, idx) => ({
-                  label: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][idx],
-                  value
-                }))}
-                live={p._live === true}
-                canDisconnect
-                onDisconnect={handleDisconnectPlatform}
+          {currentPage === "progress" && (
+            <>
+              <GoalCard
+                currentRevenue={goal.currentRevenue}
+                previousRevenue={goal.previousRevenue}
+                growthTargetPercent={goal.growthTargetPercent}
               />
-            ))}
-            {!loading && visiblePlatforms.length === 0 && (
-              <p className="text-xs text-slate-400 col-span-full">
-                Koppla in minst en plattform ovan för att se dina riktiga siffror.
+
+              <AdSimulator
+                baseRevenue={goal.currentRevenue}
+                baseAdSpend={600}
+                targetRevenue={
+                  goal.currentRevenue *
+                  (1 + (goal.growthTargetPercent || 30) / 100)
+                }
+              />
+
+              <section className="flex flex-col gap-4 md:gap-5 max-w-3xl">
+                <AddPlatform
+                  platforms={platforms}
+                  onConnectTiktok={handleConnectTiktok}
+                  onAdded={loadData}
+                />
+                {visiblePlatforms.map((p) => (
+                  <PlatformOverview
+                    key={p.platform}
+                    platform={p.platform}
+                    handle={p.handle}
+                    metrics={p.metrics}
+                    hashtagStats={p.hashtags}
+                    engagementTrend={(p.engagementTrend || []).map(
+                      (value, idx) => ({
+                        label: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][
+                          idx
+                        ],
+                        value
+                      })
+                    )}
+                    live={p._live === true}
+                    canDisconnect
+                    onDisconnect={handleDisconnectPlatform}
+                  />
+                ))}
+                {!loading && visiblePlatforms.length === 0 && (
+                  <p className="text-xs text-slate-400 col-span-full">
+                    Koppla in minst en plattform ovan för att se dina riktiga
+                    siffror.
+                  </p>
+                )}
+              </section>
+            </>
+          )}
+
+          {currentPage === "accounts" && (
+            <section className="flex flex-col gap-4 md:gap-5 max-w-3xl">
+              <AddPlatform
+                platforms={platforms}
+                onConnectTiktok={handleConnectTiktok}
+                onAdded={loadData}
+              />
+              <ConnectedAccounts platforms={platforms} onDisconnect={loadData} />
+              {!loading && platforms.length === 0 && (
+                <p className="text-xs text-slate-400">
+                  Connect at least one platform to start tracking real data.
+                </p>
+              )}
+            </section>
+          )}
+
+          {currentPage === "goals" && (
+            <>
+              <GoalCard
+                currentRevenue={goal.currentRevenue}
+                previousRevenue={goal.previousRevenue}
+                growthTargetPercent={goal.growthTargetPercent}
+              />
+              <p className="text-xs text-slate-400 max-w-md">
+                Justera dina mål genom att starta om onboarding, eller använd
+                nuvarande siffror som kompass för dina nästa steg.
               </p>
-            )}
-          </section>
+            </>
+          )}
+
+          {currentPage === "reports" && (
+            <>
+              <AdSimulator
+                baseRevenue={goal.currentRevenue}
+                baseAdSpend={600}
+                targetRevenue={
+                  goal.currentRevenue *
+                  (1 + (goal.growthTargetPercent || 30) / 100)
+                }
+              />
+              <section className="flex flex-col gap-4 md:gap-5 max-w-3xl">
+                {visiblePlatforms.map((p) => (
+                  <PlatformOverview
+                    key={p.platform}
+                    platform={p.platform}
+                    handle={p.handle}
+                    metrics={p.metrics}
+                    hashtagStats={p.hashtags}
+                    engagementTrend={(p.engagementTrend || []).map(
+                      (value, idx) => ({
+                        label: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][
+                          idx
+                        ],
+                        value
+                      })
+                    )}
+                    live={p._live === true}
+                    canDisconnect
+                    onDisconnect={handleDisconnectPlatform}
+                  />
+                ))}
+                {!loading && visiblePlatforms.length === 0 && (
+                  <p className="text-xs text-slate-400 col-span-full">
+                    Koppla in minst en plattform för att se rapportkort här.
+                  </p>
+                )}
+              </section>
+            </>
+          )}
 
           <footer className="pt-2 pb-1 text-[11px] text-slate-500 flex flex-wrap items-center justify-between gap-2">
             <span>

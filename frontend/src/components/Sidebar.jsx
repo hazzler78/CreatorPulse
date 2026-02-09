@@ -3,7 +3,8 @@ import { motion } from "framer-motion";
 export default function Sidebar({
   currentPage = "progress",
   onToggleTheme,
-  onRestartOnboarding
+  onRestartOnboarding,
+  onNavigate
 }) {
   const navItems = [
     { id: "progress", label: "Progress hub" },
@@ -46,11 +47,13 @@ export default function Sidebar({
           return (
             <button
               key={item.id}
+              type="button"
               className={`w-full flex items-center justify-between rounded-xl px-3 py-2.5 text-left transition-colors ${
                 active
                   ? "bg-slate-100 text-slate-900"
                   : "text-slate-300 hover:bg-slate-800/80"
               }`}
+              onClick={() => onNavigate?.(item.id)}
             >
               <span>{item.label}</span>
               {active && (
@@ -63,7 +66,11 @@ export default function Sidebar({
         })}
 
         <div className="pt-2 border-t border-slate-800 mt-1.5">
-          <button className="w-full rounded-xl border border-dashed border-slate-700 px-3 py-2.5 text-[11px] text-slate-300 hover:border-slate-500 hover:text-slate-100 transition-colors">
+          <button
+            type="button"
+            onClick={() => onNavigate?.("accounts")}
+            className="w-full rounded-xl border border-dashed border-slate-700 px-3 py-2.5 text-[11px] text-slate-300 hover:border-slate-500 hover:text-slate-100 transition-colors"
+          >
             + Connect new platform
           </button>
           {onRestartOnboarding && (
