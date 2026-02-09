@@ -513,10 +513,82 @@ router.get("/summary", async (req, res) => {
     }
 
     if (youtubeLiveStats) {
-      const { subscribers, views, videos, title } = youtubeLiveStats;
+      const { id: channelId, subscribers, views, videos, title } = youtubeLiveStats;
       const approxRevenue = (views / 1000) * 3;
       const engagementRate = subscribers && videos ? (subscribers / videos) * 0.1 : 2.5;
       const displayHandle = (youtubeHandle || "").replace(/^@+/, "");
+
+      // Derive keyword/hashtag performance from real YouTube video tags
+      let youtubeHashtags = [];
+      if (apiKey && channelId) {
+        try {
+          const ytVideos = await fetchChannelVideosWithTags(channelId, apiKey, 40);
+          if (ytVideos.length) {
+            let totalViewsAll = 0;
+            for (const v of ytVideos) {
+              if (!Number.isFinite(v.viewCount)) continue;
+              totalViewsAll += Math.max(v.viewCount, 0);
+            }
+            const videoCount = ytVideos.length;
+            const overallAvgViews = videoCount > 0 ? totalViewsAll / videoCount : 0;
+
+            if (overallAvgViews) {
+              /** @type {Record<string, { keyword: string, totalViews: number, uses: number }>} */
+              const keywordMap = {};
+
+              for (const v of ytVideos) {
+                const vViews = Number(v.viewCount ?? 0);
+                if (!Number.isFinite(vViews) || vViews <= 0) continue;
+
+                const tags = Array.isArray(v.tags) ? v.tags : [];
+                const unique = Array.from(
+                  new Set(tags.map((t) => String(t || "").trim()))
+                ).filter(Boolean);
+
+                for (const kw of unique) {
+                  const keyword = kw.toLowerCase();
+                  if (!keywordMap[keyword]) {
+                    keywordMap[keyword] = { keyword, totalViews: 0, uses: 0 };
+                  }
+                  keywordMap[keyword].totalViews += vViews;
+                  keywordMap[keyword].uses += 1;
+                }
+              }
+
+              const allKeywords = Object.values(keywordMap);
+              allKeywords.sort((a, b) => {
+                if (b.totalViews !== a.totalViews) return b.totalViews - a.totalViews;
+                return b.uses - a.uses;
+              });
+
+              youtubeHashtags = allKeywords.slice(0, 8).map((k) => {
+                const avgViews = k.uses > 0 ? k.totalViews / k.uses : 0;
+                const rawLift = overallAvgViews > 0 ? avgViews / overallAvgViews : 0;
+                const lift = Number.isFinite(rawLift) && rawLift > 0 ? rawLift : 0.1;
+                // Render as hashtag-style label, compacting spaces
+                const compact = k.keyword.replace(/\s+/g, "");
+                return {
+                  tag: `#${compact}`,
+                  lift: Number(Math.max(lift, 0.1).toFixed(2))
+                };
+              });
+            }
+          }
+        } catch (err) {
+          console.error("YouTube keyword aggregation error in summary:", err?.message || err);
+        }
+      }
+
+      // Fallback synthetic tags only if we couldn't compute real ones
+      if (!youtubeHashtags.length) {
+        youtubeHashtags = [
+          { tag: "#subscribers", lift: Math.max(subscribers / 1000, 0.1) },
+          { tag: "#views", lift: Math.max(views / 100000, 0.1) },
+          { tag: "#videos", lift: Math.max(videos / 50, 0.1) },
+          { tag: "#youtubegrowth", lift: 1.5 }
+        ];
+      }
+
       platforms.push({
         platform: "YouTube",
         handle: displayHandle,
@@ -529,12 +601,7 @@ router.get("/summary", async (req, res) => {
           topPostViews: Number(views),
           topPostLabel: `Total channel views · "${title}"`
         },
-        hashtags: [
-          { tag: "#subscribers", lift: Math.max(subscribers / 1000, 0.1) },
-          { tag: "#views", lift: Math.max(views / 100000, 0.1) },
-          { tag: "#videos", lift: Math.max(videos / 50, 0.1) },
-          { tag: "#youtubegrowth", lift: 1.5 }
-        ],
+        hashtags: youtubeHashtags,
         engagementTrend: [2.8, 3.1, 3.6, 3.9, 4.2, 4.5, 4.9]
       });
     }
