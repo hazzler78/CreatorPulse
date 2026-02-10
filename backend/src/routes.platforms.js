@@ -15,6 +15,140 @@ const TIKTOK_CLIENT_SECRET = process.env.TIKTOK_CLIENT_SECRET;
 const BRAND_HASHTAG = "#velvetorionx"; // TODO: make per-user configurable later
 
 /**
+ * Build a simple 7-day "engagement trend" from TikTok videos.
+ *
+ * We don't get per-video likes/saves in the current API call, so we treat
+ * view_count as a proxy for momentum. The goal here is *motivating movement*,
+ * not an academically perfect metric:
+ *
+ * - Look at the last 7 calendar days including today (UTC).
+ * - For each day, sum views of videos created on that day.
+ * - Normalise into a 0–10-ish percent-like scale so strong days clearly pop.
+ *
+ * Returns an array of 7 numbers; callers can map them onto labels however they
+ * like (the frontend currently labels them Mon–Sun).
+ */
+function computeTikTokEngagementTrend(videos = []) {
+  if (!Array.isArray(videos) || videos.length === 0) {
+    return [];
+  }
+
+  // Prepare 7 buckets for "today" and the 6 previous days
+  const buckets = new Array(7).fill(0);
+
+  const now = new Date();
+  const todayUtc = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
+  );
+  const dayMs = 24 * 60 * 60 * 1000;
+
+  for (const v of videos) {
+    const rawViews = Number(v.view_count ?? 0);
+    if (!Number.isFinite(rawViews) || rawViews <= 0) continue;
+
+    const rawTime = Number(v.create_time ?? 0);
+    if (!Number.isFinite(rawTime) || rawTime <= 0) continue;
+
+    // TikTok create_time is seconds since epoch; be defensive if it's already ms
+    const tsMs = rawTime > 1e12 ? rawTime : rawTime * 1000;
+    const created = new Date(tsMs);
+    const createdUtc = new Date(
+      Date.UTC(
+        created.getUTCFullYear(),
+        created.getUTCMonth(),
+        created.getUTCDate()
+      )
+    );
+
+    const diffMs = todayUtc - createdUtc;
+    if (diffMs < 0 || diffMs > 6 * dayMs) {
+      // Outside the 0–6 day window we care about
+      continue;
+    }
+
+    const dayIndexFromToday = Math.round(diffMs / dayMs); // 0 = today, 1 = yesterday, ...
+    const bucketIndex = 6 - dayIndexFromToday; // 0 = oldest, 6 = today
+    if (bucketIndex < 0 || bucketIndex > 6) continue;
+
+    buckets[bucketIndex] += Math.max(rawViews, 0);
+  }
+
+  const maxViews = Math.max(...buckets);
+  if (!maxViews) {
+    return [];
+  }
+
+  // Normalise to a roughly 0–10 scale and keep one decimal place.
+  return buckets.map((sum) => {
+    const ratio = sum / maxViews; // 0–1
+    const scaled = 2 + ratio * 8; // 2–10 range so "quiet" days aren't invisible
+    return Number(scaled.toFixed(1));
+  });
+}
+
+/**
+ * Build a 7-day engagement trend for YouTube based on recent video views.
+ *
+ * Uses viewCount as a simple proxy for momentum and groups by the video's
+ * publishedAt date (UTC). Same idea as TikTok: motivating shape > perfect KPI.
+ *
+ * @param {Array<{ viewCount?: number, publishedAt?: string | null }>} videos
+ * @returns {number[]}
+ */
+function computeYouTubeEngagementTrend(videos = []) {
+  if (!Array.isArray(videos) || videos.length === 0) {
+    return [];
+  }
+
+  const buckets = new Array(7).fill(0);
+
+  const now = new Date();
+  const todayUtc = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
+  );
+  const dayMs = 24 * 60 * 60 * 1000;
+
+  for (const v of videos) {
+    const rawViews = Number(v.viewCount ?? 0);
+    if (!Number.isFinite(rawViews) || rawViews <= 0) continue;
+
+    if (!v.publishedAt) continue;
+    const created = new Date(v.publishedAt);
+    if (Number.isNaN(created.getTime())) continue;
+
+    const createdUtc = new Date(
+      Date.UTC(
+        created.getUTCFullYear(),
+        created.getUTCMonth(),
+        created.getUTCDate()
+      )
+    );
+
+    const diffMs = todayUtc - createdUtc;
+    if (diffMs < 0 || diffMs > 6 * dayMs) {
+      continue;
+    }
+
+    const dayIndexFromToday = Math.round(diffMs / dayMs);
+    const bucketIndex = 6 - dayIndexFromToday;
+    if (bucketIndex < 0 || bucketIndex > 6) continue;
+
+    buckets[bucketIndex] += Math.max(rawViews, 0);
+  }
+
+  const maxViews = Math.max(...buckets);
+  if (!maxViews) {
+    return [];
+  }
+
+  return buckets.map((sum) => {
+    const ratio = sum / maxViews;
+    const scaled = 2 + ratio * 8;
+    return Number(scaled.toFixed(1));
+  });
+}
+
+/**
  * Compute top-performing hashtags from a list of TikTok videos.
  * Each video is expected to have: { title, description, view_count }.
  * Returns array of { tag, lift } where lift is the average views for
@@ -547,6 +681,10 @@ router.get("/summary", async (req, res) => {
             : `Live · Top post (${display_name || username})`)
         : `Live · "${display_name || username}"`;
 
+      // Build a real engagement trend from recent videos; fall back to the
+      // previous static shape if we have no usable data.
+      const realEngagementTrend = computeTikTokEngagementTrend(videos);
+
       // Derive hashtag performance from real video captions
       const realHashtagStats = computeTikTokHashtagStats(videos);
       const fallbackHashtags = [
@@ -570,7 +708,10 @@ router.get("/summary", async (req, res) => {
           followerCount: follower_count
         },
         hashtags: realHashtagStats.length > 0 ? realHashtagStats : fallbackHashtags,
-        engagementTrend: [3.2, 3.8, 4.4, 4.1, 4.9, 5.3, 4.7]
+        engagementTrend:
+          realEngagementTrend.length === 7
+            ? realEngagementTrend
+            : [3.2, 3.8, 4.4, 4.1, 4.9, 5.3, 4.7]
       });
     }
 
@@ -607,6 +748,7 @@ router.get("/summary", async (req, res) => {
 
       // Derive keyword/hashtag performance from real YouTube video tags
       let youtubeHashtags = [];
+      let youtubeEngagementTrend = [];
       if (apiKey && channelId) {
         try {
           const ytVideos = await fetchChannelVideosWithTags(channelId, apiKey, 40);
@@ -620,6 +762,10 @@ router.get("/summary", async (req, res) => {
             const overallAvgViews = videoCount > 0 ? totalViewsAll / videoCount : 0;
 
             if (overallAvgViews) {
+              // Use the same videos both for hashtag/keyword lift and for
+              // a 7-day engagement shape so recent uploads visibly move the chart.
+              youtubeEngagementTrend = computeYouTubeEngagementTrend(ytVideos);
+
               /** @type {Record<string, { keyword: string, totalViews: number, uses: number }>} */
               const keywordMap = {};
 
@@ -706,7 +852,10 @@ router.get("/summary", async (req, res) => {
           videoCount: videos
         },
         hashtags: youtubeHashtags,
-        engagementTrend: [2.8, 3.1, 3.6, 3.9, 4.2, 4.5, 4.9]
+        engagementTrend:
+          youtubeEngagementTrend.length === 7
+            ? youtubeEngagementTrend
+            : [2.8, 3.1, 3.6, 3.9, 4.2, 4.5, 4.9]
       });
     }
 
