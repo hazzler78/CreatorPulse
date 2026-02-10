@@ -33,6 +33,47 @@ function HashtagPill({ tag, lift, isTop }) {
   );
 }
 
+function computeMomentumStatus(engagementTrend = []) {
+  if (!Array.isArray(engagementTrend) || engagementTrend.length < 2) {
+    return {
+      label: "Momentum building",
+      tone: "neutral"
+    };
+  }
+
+  const first = Number(engagementTrend[0]?.value ?? 0);
+  const last = Number(engagementTrend[engagementTrend.length - 1]?.value ?? 0);
+  const baseline = Math.max(first, 1);
+  const change = last - first;
+  const changePct = (change / baseline) * 100;
+
+  if (changePct >= 40 && last >= 5) {
+    return {
+      label: "Momentum spike",
+      tone: "spike"
+    };
+  }
+
+  if (changePct >= 15) {
+    return {
+      label: "Momentum building",
+      tone: "up"
+    };
+  }
+
+  if (changePct <= -15) {
+    return {
+      label: "Cooling off",
+      tone: "down"
+    };
+  }
+
+  return {
+    label: "Stable this week",
+    tone: "stable"
+  };
+}
+
 export default function PlatformOverview({
   platform,
   handle,
@@ -46,6 +87,16 @@ export default function PlatformOverview({
 }) {
   const primaryColor =
     platform === "TikTok" ? "#22c55e" : platform === "Facebook" ? "#3b82f6" : "#6366f1";
+  const momentum = computeMomentumStatus(engagementTrend);
+
+  const momentumClasses =
+    momentum.tone === "spike"
+      ? "bg-emerald-500/20 border border-emerald-400/70 text-emerald-100"
+      : momentum.tone === "up"
+      ? "bg-emerald-500/10 border border-emerald-500/40 text-emerald-300"
+      : momentum.tone === "down"
+      ? "bg-amber-500/10 border border-amber-400/50 text-amber-200"
+      : "bg-slate-900/70 border border-slate-700 text-slate-300";
 
   return (
     <motion.div
@@ -92,9 +143,13 @@ export default function PlatformOverview({
               Live
             </span>
           )}
-          <div className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1 text-[11px] text-emerald-300">
-            <span className="text-xs">⬈</span>
-            Momentum building
+          <div
+            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] ${momentumClasses}`}
+          >
+            <span className="text-xs">
+              {momentum.tone === "down" ? "↘" : momentum.tone === "stable" ? "→" : "⬈"}
+            </span>
+            {momentum.label}
           </div>
         </div>
       </div>
