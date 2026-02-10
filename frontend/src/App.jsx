@@ -12,6 +12,30 @@ import AddPlatform from "./components/AddPlatform.jsx";
 import HashtagSuggestions from "./components/HashtagSuggestions.jsx";
 import MomentumMilestones from "./components/MomentumMilestones.jsx";
 
+function buildEngagementTrendWithDates(raw = []) {
+  if (!Array.isArray(raw) || raw.length === 0) return [];
+
+  const len = raw.length;
+  const today = new Date();
+  // Oldest day = len - 1 days ago; newest (last point) = today.
+  const start = new Date(
+    today.getFullYear(),
+    today.getMonth(),
+    today.getDate() - (len - 1)
+  );
+
+  return raw.map((value, idx) => {
+    const d = new Date(start.getTime());
+    d.setDate(start.getDate() + idx);
+    const day = d.getDate().toString().padStart(2, "0");
+    const month = (d.getMonth() + 1).toString().padStart(2, "0");
+    return {
+      label: `${day}/${month}`,
+      value
+    };
+  });
+}
+
 function useTheme() {
   const [theme, setTheme] = useState("dark");
 
@@ -308,13 +332,8 @@ export default function App() {
                     handle={p.handle}
                     metrics={p.metrics}
                     hashtagStats={p.hashtags}
-                    engagementTrend={(p.engagementTrend || []).map(
-                      (value, idx) => ({
-                        label: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][
-                          idx
-                        ],
-                        value
-                      })
+                    engagementTrend={buildEngagementTrendWithDates(
+                      p.engagementTrend || []
                     )}
                     live={p._live === true}
                     canDisconnect
@@ -380,13 +399,8 @@ export default function App() {
                     handle={p.handle}
                     metrics={p.metrics}
                     hashtagStats={p.hashtags}
-                    engagementTrend={(p.engagementTrend || []).map(
-                      (value, idx) => ({
-                        label: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][
-                          idx
-                        ],
-                        value
-                      })
+                    engagementTrend={buildEngagementTrendWithDates(
+                      p.engagementTrend || []
                     )}
                     live={p._live === true}
                     canDisconnect
