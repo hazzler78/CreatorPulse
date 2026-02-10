@@ -91,12 +91,12 @@ export default function PlatformOverview({
 
   const momentumClasses =
     momentum.tone === "spike"
-      ? "bg-emerald-500/20 border border-emerald-400/70 text-emerald-100"
+      ? "bg-emerald-500/15 border border-emerald-400/70 text-emerald-100"
       : momentum.tone === "up"
-      ? "bg-emerald-500/10 border border-emerald-500/40 text-emerald-300"
+      ? "bg-emerald-500/10 border border-emerald-500/50 text-emerald-200"
       : momentum.tone === "down"
-      ? "bg-amber-500/10 border border-amber-400/50 text-amber-200"
-      : "bg-slate-900/70 border border-slate-700 text-slate-300";
+      ? "bg-rose-500/10 border border-rose-500/60 text-rose-100"
+      : "bg-amber-500/10 border border-amber-400/60 text-amber-100";
 
   return (
     <motion.div
